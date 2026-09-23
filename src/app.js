@@ -44,11 +44,31 @@ const player = (id) => state.roster.find((p) => p.id === id);
 const button = (label, cmd, cls = "", disabled = false) =>
   `<button class="${cls}" data-cmd="${cmd}" ${disabled ? "disabled" : ""}>${label}</button>`;
 function toast(s) {
-  const el = document.querySelector("#toast");
+  let el = document.querySelector("#toast");
+
+  if (modal.open) {
+    el = modal.querySelector(".dialog-toast");
+
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "dialog-toast";
+      el.setAttribute("role", "status");
+      modal.append(el);
+    }
+  }
+
   el.textContent = s;
   el.classList.add("show");
+
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove("show"), 2600);
+
+  toast.timer = setTimeout(() => {
+    el.classList.remove("show");
+
+    if (el.classList.contains("dialog-toast")) {
+      setTimeout(() => el.remove(), 220);
+    }
+  }, 2600);
 }
 function persist(next, message) {
   try {
@@ -213,6 +233,9 @@ function render() {
                             <h3>${esc(p.name)}</h3>
                             <p>${esc(p.role)}</p>
                           </div>
+
+                          ${button("Editar", `edit-roster-player:${p.id}`)}
+
                         </article>
                       `,
                     )
@@ -267,7 +290,7 @@ function actionDialog() {
     `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p><div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "Blo", "="] : ["#", "+", "-", "="]).map((g) => button(`<b>${g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
   );
 }
-function saveRosterPlayer(form) {
+function saveRosterPlayer(form, originalId = null) {
   const data = new FormData(form);
 
   const id = Number(data.get("id"));
@@ -291,13 +314,23 @@ function saveRosterPlayer(form) {
     return;
   }
 
-  if (teamRoster.some((p) => p.id === id)) {
+  const isEditing = originalId !== null;
+
+  if (isEditing && !teamRoster.some((p) => p.id === originalId)) {
+    toast("No se encontró el jugador que quieres editar.");
+    return;
+  }
+
+  if (teamRoster.some((p) => p.id === id && p.id !== originalId)) {
     toast(`El dorsal ${id} ya está utilizado.`);
     return;
   }
 
-  const newPlayer = { id, name, role };
-  const nextRoster = [...teamRoster, newPlayer];
+  const playerData = { id, name, role };
+
+  const nextRoster = isEditing
+    ? teamRoster.map((p) => (p.id === originalId ? playerData : p))
+    : [...teamRoster, playerData];
 
   try {
     saveRoster(nextRoster);
@@ -306,14 +339,22 @@ function saveRosterPlayer(form) {
   } catch {
     storageError = true;
     render();
-    toast("No se pudo guardar el jugador.");
+    toast(
+      isEditing
+        ? "No se pudieron guardar los cambios."
+        : "No se pudo guardar el jugador.",
+    );
     return;
   }
 
   modal.close();
   render();
 
-  toast(`#${id} ${name} añadido a la plantilla.`);
+  toast(
+    isEditing
+      ? `#${id} ${name} actualizado.`
+      : `#${id} ${name} añadido a la plantilla.`,
+  );
 }
 document.addEventListener("click", (e) => {
   const target = e.target.closest("[data-cmd]");
@@ -344,6 +385,7 @@ document.addEventListener("click", (e) => {
             autofocus
           />
         </label>
+
         <label>
           Nombre
           <input
@@ -353,6 +395,7 @@ document.addEventListener("click", (e) => {
             required
           />
         </label>
+
         <label>
           Posición
           <select name="role" required>
@@ -363,18 +406,97 @@ document.addEventListener("click", (e) => {
             <option value="Líbero">Líbero</option>
           </select>
         </label>
+
         <div class="dialog-actions">
           ${button("Cancelar", "close")}
-          <button class="primary" type="button" data-cmd="save-roster-player">Guardar jugador</button>
+          <button
+            class="primary"
+            type="button"
+            data-cmd="save-roster-player"
+          >
+            Guardar jugador
+          </button>
         </div>
       </form>`,
     );
     return;
   }
+
+  if (cmd === "edit-roster-player") {
+    const id = Number(value);
+    const rosterPlayer = teamRoster.find((p) => p.id === id);
+
+    if (!rosterPlayer) {
+      toast("No se encontró el jugador.");
+      return;
+    }
+
+    show(
+      "Editar jugador",
+      `<form id="roster-form" onsubmit="return false">
+        <label>
+          Dorsal
+          <input
+            type="number"
+            name="id"
+            min="1"
+            max="99"
+            value="${rosterPlayer.id}"
+            required
+          />
+        </label>
+
+        <label>
+          Nombre
+          <input
+            type="text"
+            name="name"
+            maxlength="40"
+            value="${esc(rosterPlayer.name)}"
+            required
+          />
+        </label>
+
+        <label>
+          Posición
+          <select name="role" required>
+            <option value="Colocador" ${rosterPlayer.role === "Colocador" ? "selected" : ""}>Colocador</option>
+            <option value="Opuesto" ${rosterPlayer.role === "Opuesto" ? "selected" : ""}>Opuesto</option>
+            <option value="Receptor" ${rosterPlayer.role === "Receptor" ? "selected" : ""}>Receptor</option>
+            <option value="Central" ${rosterPlayer.role === "Central" ? "selected" : ""}>Central</option>
+            <option value="Líbero" ${rosterPlayer.role === "Líbero" ? "selected" : ""}>Líbero</option>
+          </select>
+        </label>
+
+        <div class="dialog-actions">
+          ${button("Cancelar", "close")}
+          <button
+            class="primary"
+            type="button"
+            data-cmd="save-roster-edit:${rosterPlayer.id}"
+          >
+            Guardar cambios
+          </button>
+        </div>
+      </form>`,
+    );
+
+    return;
+  }
+
   if (cmd === "save-roster-player") {
     saveRosterPlayer(document.querySelector("#roster-form"));
     return;
   }
+
+  if (cmd === "save-roster-edit") {
+    saveRosterPlayer(
+      document.querySelector("#roster-form"),
+      Number(value),
+    );
+    return;
+  }
+
   if (["ours", "theirs", "serve-error", "attack-error"].includes(cmd)) {
     commit({
       type: "point",

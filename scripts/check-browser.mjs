@@ -58,7 +58,39 @@ try{
   assert.match(await page.locator('.roster-grid').innerText(),/Irene/);
   equal((await state()).roster,rosterBefore);
   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
-  await tap('nav:history');assert.match(await page.locator('main').innerText(),/Todavía no hay operaciones/);
+  await tap('edit-roster-player:22');
+   await page.locator('[name="name"]').fill('Irene Editada');
+   await page.selectOption('[name="role"]','L\u00edbero');
+   await tap('save-roster-edit:22');
+
+   assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   equal((await state()).roster,rosterBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+
+   await page.reload();
+   await tap('nav:roster');
+   assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   equal((await state()).roster,rosterBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+
+   await tap('edit-roster-player:22');
+   await page.locator('[name="id"]').fill('4');
+   await tap('save-roster-edit:22');
+
+   assert(await page.locator('#modal').evaluate(el=>el.open));
+   assert.match(await page.locator('.dialog-toast.show').innerText(),/utilizado/);
+   assert(await page.evaluate(()=>{
+     const roster=JSON.parse(localStorage.getItem('volleytrack.roster.v1'));
+     return roster.some(p=>p.id===22&&p.name==='Irene Editada') &&
+       roster.filter(p=>p.id===4).length===1;
+   }));
+   equal((await state()).roster,rosterBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+   await tap('close');
+
+   await tap('nav:history');assert.match(await page.locator('main').innerText(),/Todavía no hay operaciones/);
   await tap('nav:match');await tap('ours');equal((await state()).score,[1,0]);await undo();
  });
  await check('Estadisticas reales, filtro, correccion, persistencia y restauracion',async()=>{
@@ -71,7 +103,7 @@ try{
  });
  await check('Correccion de ultimo registro, deshacer vacio y fallo al guardar',async()=>{
   await reset();await tap('ours');const before=await state();await tap('history');await tap('edit-event:0');await tap('delete-event:0');await tap('confirm-correction');equal((await state()).events.length,0);assert.equal(await page.locator('[data-cmd="undo"]').isDisabled(),false);await page.reload();await undo();equal(await state(),before);
-  await tap('history');await tap('edit-event:0');await page.selectOption('[name="kind"]','net');await page.locator('#edit-form button').click();await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('Full')}});await tap('confirm-correction');equal(await state(),before);assert.match(await page.locator('#toast').innerText(),/No se pudo guardar/);
+  await tap('history');await tap('edit-event:0');await page.selectOption('[name="kind"]','net');await page.locator('#edit-form button').click();await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('Full')}});await tap('confirm-correction');equal(await state(),before);assert.match(await page.locator('.dialog-toast.show').innerText(),/No se pudo guardar/);
  });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);

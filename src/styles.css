@@ -1821,3 +1821,28 @@ dialog.stats-dialog {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+
+/* Toast visible dentro de dialog modal */
+.dialog-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translate(-50%, 20px);
+  padding: 14px 24px;
+  background: #204c3e;
+  color: white;
+  border-radius: 10px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s;
+  z-index: 100;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.dialog-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
