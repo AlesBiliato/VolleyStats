@@ -1846,3 +1846,26 @@ dialog.stats-dialog {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+
+/* Indicador visual de saque */
+#app .score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: center;
+  text-align: center;
+}
+
+#app .serve-indicator {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: center;
+  min-height: 24px;
+  margin: -6px 0 4px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+#app .serve-indicator > span {
+  text-align: center;
+}
