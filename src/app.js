@@ -108,7 +108,7 @@ function commit(command) {
 }
 function show(title, body) {
   modal.classList.toggle("stats-dialog", title === "Estadísticas");
-  modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYTRACK</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
+  modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYSTATS</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
   if (!modal.open) modal.showModal();
 }
 function score() {
@@ -137,7 +137,7 @@ function render() {
   app.innerHTML = `
     <header>
       <a class="brand" href="#" data-cmd="nav:match">
-        <span class="brand-mark">V</span>Volley<span>Track</span>
+        <span class="brand-mark">V</span>Volley<span>Stats</span>
       </a>
 
       <nav>
@@ -258,7 +258,7 @@ function render() {
 
       <footer>
         <span>
-          VOLLEYTRACK <b> / </b> Tu equipo, punto a punto.
+          VOLLEYSTATS <b> / </b> Tu equipo, punto a punto.
         </span>
 
         <span>

@@ -14,8 +14,8 @@ const errors=[];const results=[];
 const context=await browser.newContext({viewport:{width:1024,height:600}});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
 const url=`http://127.0.0.1:${server.address().port}`;
-const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.match.v1')));
-async function reset(s=initial()) {await page.goto(url);await page.evaluate(s=>localStorage.setItem('volleytrack.match.v1',JSON.stringify(s)),s);await page.reload();await page.locator('.court').waitFor();}
+const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')));
+async function reset(s=initial()) {await page.goto(url);await page.evaluate(s=>localStorage.setItem('volleystats.match.v1',JSON.stringify(s)),s);await page.reload();await page.locator('.court').waitFor();}
 async function tap(cmd){await page.locator(`[data-cmd="${cmd}"]`).first().click();}
 async function commit(cmd){await page.waitForTimeout(420);await tap(cmd);}
 async function undo(){await tap('undo');await commit('confirm-undo');}
@@ -47,33 +47,33 @@ try{
  });
  await check('Estadisticas, plantilla e historial',async()=>{
   await reset();await tap('stats');equal(await page.locator('.stats-tabs .primary').innerText(),'General');equal(await page.locator('.stats-tabs button').allTextContents(),['General','K1/K2','Rotaciones','Errores']);await tap('stat-tab:K1/K2');equal(await page.locator('.phase-card').count(),2);assert.match(await page.locator('.phase-card').nth(0).innerText(),/Recepción/);assert.match(await page.locator('.phase-card').nth(1).innerText(),/Saque/);assert.equal(await page.locator('.phase-dashboard table').count(),0);assert.match(await page.locator('.phase-summary').innerText(),/Total de fases/);for(const tab of ['General','Rotaciones','Errores'])await tap('stat-tab:'+tab);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/Sustituciones/);await tap('close');await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),10);
-  const matchBefore=await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1'));
+  const matchBefore=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
   const rosterBefore=(await state()).roster;
   await tap('add-roster-player');await page.locator('[name="id"]').fill('22');await page.locator('[name="name"]').fill('Irene');await page.selectOption('[name="role"]','Receptor');await tap('save-roster-player');
   equal(await page.locator('.roster-grid article').count(),11);
-  assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.roster.v1')).some(p=>p.id===22&&p.name==='Irene')));
+  assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene')));
   equal((await state()).roster,rosterBefore);
-  equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+  equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
   await page.reload();await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),11);
   assert.match(await page.locator('.roster-grid').innerText(),/Irene/);
   equal((await state()).roster,rosterBefore);
-  equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+  equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
   await tap('edit-roster-player:22');
    await page.locator('[name="name"]').fill('Irene Editada');
    await page.selectOption('[name="role"]','L\u00edbero');
    await tap('save-roster-edit:22');
 
    assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
-   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
    equal((await state()).roster,rosterBefore);
-   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
 
    await page.reload();
    await tap('nav:roster');
    assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
-   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleytrack.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
    equal((await state()).roster,rosterBefore);
-   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
 
    await tap('edit-roster-player:22');
    await page.locator('[name="id"]').fill('4');
@@ -82,12 +82,12 @@ try{
    assert(await page.locator('#modal').evaluate(el=>el.open));
    assert.match(await page.locator('.dialog-toast.show').innerText(),/utilizado/);
    assert(await page.evaluate(()=>{
-     const roster=JSON.parse(localStorage.getItem('volleytrack.roster.v1'));
+     const roster=JSON.parse(localStorage.getItem('volleystats.roster.v1'));
      return roster.some(p=>p.id===22&&p.name==='Irene Editada') &&
        roster.filter(p=>p.id===4).length===1;
    }));
    equal((await state()).roster,rosterBefore);
-   equal(await page.evaluate(()=>localStorage.getItem('volleytrack.match.v1')),matchBefore);
+   equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
    await tap('close');
 
    await tap('nav:history');assert.match(await page.locator('main').innerText(),/Todavía no hay operaciones/);
@@ -120,8 +120,22 @@ try{
   await reset();const before=await state();await page.evaluate(()=>{window.originalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new DOMException('Full','QuotaExceededError')}});await tap('ours');equal(await state(),before);assert.match(await page.locator('#toast').innerText(),/No se pudo guardar/);assert.match(await page.locator('.save-state').innerText(),/Guardado no disponible/);
   await page.evaluate(()=>{Storage.prototype.setItem=window.originalSetItem});await commit('ours');equal((await state()).score,[1,0]);assert.match(await page.locator('.save-state').innerText(),/Guardado en este dispositivo/);
  });
+ await check('Migracion de VolleyTrack a VolleyStats',async()=>{
+  const legacy=initial();
+  await page.goto(url);
+  await page.evaluate(s=>{
+    localStorage.clear();
+    localStorage.setItem('volleytrack.match.v1',JSON.stringify(s));
+    localStorage.setItem('volleytrack.roster.v1',JSON.stringify(s.roster));
+  },legacy);
+  await page.reload();
+  await page.locator('.court').waitFor();
+  equal(await state(),legacy);
+  assert(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')!==null));
+  assert(await page.evaluate(()=>localStorage.getItem('volleystats.roster.v1')!==null));
+ });
  await check('Datos guardados invalidos no dejan la pantalla en blanco',async()=>{
-  await reset();await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('volleytrack.match.v1'));s.lineup[0]=999;localStorage.setItem('volleytrack.match.v1',JSON.stringify(s))});await page.reload();await page.locator('.court').waitFor({timeout:3000});assert.match(await page.locator('.save-state').innerText(),/Guardado no disponible/);await tap('ours');equal((await state()).lineup[0],999);assert.match(await page.locator('#toast').innerText(),/No se pudo guardar/);
+  await reset();await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('volleystats.match.v1'));s.lineup[0]=999;localStorage.setItem('volleystats.match.v1',JSON.stringify(s))});await page.reload();await page.locator('.court').waitFor({timeout:3000});assert.match(await page.locator('.save-state').innerText(),/Guardado no disponible/);await tap('ours');equal((await state()).lineup[0],999);assert.match(await page.locator('#toast').innerText(),/No se pudo guardar/);
  });
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));
  if(results.some(r=>!r.ok)||errors.length)process.exitCode=1;

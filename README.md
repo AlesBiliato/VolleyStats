@@ -1,4 +1,4 @@
-# VolleyTrack · MVP 0.1
+# VolleyStats · MVP 0.1
 
 Aplicación local orientada a tablet horizontal. Sin dependencias externas, con módulos ES preparados para ampliar el producto. La aplicación mantiene una plantilla general del equipo guardada localmente y un roster independiente para cada partido.
 

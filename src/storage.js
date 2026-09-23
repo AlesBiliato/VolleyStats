@@ -1,7 +1,9 @@
 // Device-local repository boundary. Replace this adapter with IndexedDB when adding match archives.
 
-const MATCH_KEY = "volleytrack.match.v1";
-const ROSTER_KEY = "volleytrack.roster.v1";
+const MATCH_KEY = "volleystats.match.v1";
+const ROSTER_KEY = "volleystats.roster.v1";
+const LEGACY_MATCH_KEY = "volleytrack.match.v1";
+const LEGACY_ROSTER_KEY = "volleytrack.roster.v1";
 
 const validScore = (score) =>
   Array.isArray(score) &&
@@ -81,7 +83,13 @@ function validMatch(data) {
 }
 
 export function loadMatch() {
-  const value = localStorage.getItem(MATCH_KEY);
+  let value = localStorage.getItem(MATCH_KEY);
+  let legacy = false;
+
+  if (!value) {
+    value = localStorage.getItem(LEGACY_MATCH_KEY);
+    legacy = Boolean(value);
+  }
 
   if (!value) return null;
 
@@ -94,6 +102,14 @@ export function loadMatch() {
   )
     throw Error("Formato local no compatible");
 
+  if (legacy) {
+    try {
+      localStorage.setItem(MATCH_KEY, value);
+    } catch {
+      // Keep loading the valid legacy copy if migration cannot be persisted.
+    }
+  }
+
   return data;
 }
 
@@ -102,13 +118,27 @@ export function saveMatch(match) {
 }
 
 export function loadRoster() {
-  const value = localStorage.getItem(ROSTER_KEY);
+  let value = localStorage.getItem(ROSTER_KEY);
+  let legacy = false;
+
+  if (!value) {
+    value = localStorage.getItem(LEGACY_ROSTER_KEY);
+    legacy = Boolean(value);
+  }
 
   if (!value) return null;
 
   const data = JSON.parse(value);
 
   if (!validRoster(data)) throw Error("Formato de plantilla no compatible");
+
+  if (legacy) {
+    try {
+      localStorage.setItem(ROSTER_KEY, value);
+    } catch {
+      // Keep loading the valid legacy copy if migration cannot be persisted.
+    }
+  }
 
   return data;
 }
