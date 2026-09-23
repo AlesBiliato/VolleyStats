@@ -35,8 +35,11 @@ try{
   await tap('history');assert.match(await page.locator('#modal').innerText(),/Falta de rotación/);assert.match(await page.locator('#modal').innerText(),/Toque de red/);await tap('close');
  });
  await check('Acciones por jugador y sus valoraciones',async()=>{
-  const combos=[['Recepción','#',null],['Recepción','+',null],['Recepción','-',null],['Recepción','=',1],['Saque','#',0],['Saque','+',null],['Saque','-',1],['Saque','=',1],['Ataque','#',0],['Ataque','+',null],['Ataque','Blo',1],['Ataque','=',1],['Bloqueo','#',0],['Bloqueo','=',1]];
+  const combos=[['Recepción','#',null],['Recepción','+',null],['Recepción','-',null],['Recepción','=',1],['Saque','#',0],['Saque','+',null],['Saque','-',1],['Saque','=',1],['Ataque','#',0],['Ataque','+',null],['Ataque','-',null],['Ataque','Blo',1],['Ataque','=',1],['Bloqueo','#',0],['Bloqueo','=',1]];
   for(const [action,grade,team] of combos){await reset();await tap('player:7');await tap('action:'+action);await tap('grade:'+grade);const s=await state();equal(s.score,team===null?[0,0]:team===0?[1,0]:[0,1]);equal(s.events.at(-1).player,7);await undo();equal((await state()).score,[0,0]);}
+ });
+ await check('Orden visible de valoraciones de Ataque',async()=>{
+  await reset();await tap('player:7');await tap('action:Ataque');assert.deepEqual(await page.locator('.grade-options button b').allTextContents(),['++','+','-','=','Blq']);await tap('close');
  });
  await check('Sustitucion cancelada, confirmada y deshecha',async()=>{
   await reset();const before=await state();await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('close');equal(await state(),before);

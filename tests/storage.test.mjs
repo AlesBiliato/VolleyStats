@@ -18,6 +18,9 @@ test('Guardado y lectura conservan partido, historial y deshacer',()=>{
  assert.deepEqual(transition(loadMatch(),{type:'undo'}),transition(state,{type:'undo'}));
 });
 
+test('Persiste y recarga un Ataque - sin perder su valoración',()=>{
+ localStore();const state=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});saveMatch(state);assert.equal(loadMatch().events.at(-1).grade,'-');
+});
 test('Rechaza datos dañados sin sobrescribirlos',()=>{
  const mutations=[
   s=>{s.lineup[0]=999;},s=>{s.lineup[0]=s.lineup[1];},s=>{s.roster[0]=null;},

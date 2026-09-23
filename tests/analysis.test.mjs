@@ -26,6 +26,11 @@ test('Estadísticas agrupan puntos reales, fases, rotación y set sin contar cie
  const p=stats.players.find(p=>p.id===7);assert.equal(p.attack,2);assert.equal(percent(p.kills-p.attackErrors,p.attack),'0 %');assert.equal(percent(p.positiveReception,p.reception),'100 %');assert.equal(percent(0,0),'—');assert.equal(statistics(s,'1').total.won,1);assert.equal(statistics(s,'2').total.actions,0);assert.equal(stats.phases[0].won,1);assert.equal(stats.phases[1].won,1);
 });
 
+test('Ataque - cuenta como ataque y calidad negativa, no como error de punto',()=>{
+ const s=play([{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'}]);
+ const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);assert.equal(p.attackErrors,0);assert.equal(p.negativeActions,1);assert.equal(p.gp,-1);assert.equal(p.points,0);
+ const plus=correctEvent(s,0,{type:'action',player:7,action:'Ataque',grade:'+',label:'Ataque +'});assert.deepEqual(plus.score,s.score);assert.equal(statistics(plus).players.find(player=>player.id===7).attack,1); const negative=correctEvent(plus,0,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});assert.deepEqual(negative.score,s.score);assert.equal(statistics(negative).players.find(player=>player.id===7).attackErrors,0);
+});
 test('BP cuenta puntos de jugadores en K2 y G-P resta acciones negativas',()=>{
  let s=initial();s.serving=true;
  for(const [action,grade] of [['Ataque','#'],['Recepción','+'],['Recepción','='],['Ataque','Blo']])s=transition(s,{type:'action',player:7,action,grade,label:`${action} ${grade}`});

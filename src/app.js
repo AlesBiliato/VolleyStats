@@ -287,7 +287,7 @@ function actionDialog() {
   const p = player(selected);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p><div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "Blo", "="] : ["#", "+", "-", "="]).map((g) => button(`<b>${g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p><div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "-", "=", "Blo"] : ["#", "+", "-", "="]).map((g) => button(`<b>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
   );
 }
 function saveRosterPlayer(form, originalId = null) {
@@ -703,7 +703,7 @@ function statsBody(tab) {
       ["Puntos", ["Tot", "BP", "G-P"]],
       ["Saque", ["Tot", "Err", "Punto directo"]],
       ["Recepción", ["Tot", "Err", "Pos %", "Exc. %"]],
-      ["Ataque", ["Tot", "Err", "Blo", "Exc", "Exc. %"]],
+      ["Ataque", ["Tot", "Err", "Blq", "Exc", "Exc. %"]],
       ["Bloqueo", ["Puntos"]],
     ];
     const empty = (n) => n || "·";
@@ -765,7 +765,7 @@ function statsBody(tab) {
       )
       .join(
         "",
-      )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: acciones positivas (# y +) menos negativas (−, =, Blo) · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
+      )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: acciones positivas (# y +) menos negativas (−, =, Blq) · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
   }
   if (tab === "K1/K2") {
     const card = (phase, title, description) => {
@@ -832,7 +832,7 @@ function editEvent(index) {
       Object.keys(grades).map((a) => [a, a]),
       e.action,
     )}</select></label><label>Valoración<select name="grade" id="edit-grade">${options(
-      grades[e.action].map((g) => [g, g]),
+      grades[e.action].map((g) => [g, e.action === "Ataque" && g === "Blo" ? "Blq" : g]),
       e.grade,
     )}</select></label>`;
   if (e.type === "sub")
@@ -866,7 +866,7 @@ function previewCorrection(index, command) {
 document.addEventListener("change", (e) => {
   if (e.target.id === "edit-action") {
     document.querySelector("#edit-grade").innerHTML = grades[e.target.value]
-      .map((g) => `<option>${g}</option>`)
+      .map((g) => `<option>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
       .join("");
   }
 });

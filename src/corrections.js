@@ -1,6 +1,6 @@
 import {transition} from './domain.js';
 
-export const grades={Saque:['#','+','-','='],'Recepción':['#','+','-','='],Ataque:['#','+','Blo','='],Bloqueo:['#','=']};
+export const grades={Saque:['#','+','-','='],'Recepción':['#','+','-','='],Ataque:['#','+','-','=','Blo'],Bloqueo:['#','=']};
 export function eventCommand(event){
  const keys={point:['team','category','reason'],action:['player','action','grade'],sub:['out','in'],finish:[],next:['serving']}[event.type];
  if(!keys)throw Error('Operación no compatible.');
