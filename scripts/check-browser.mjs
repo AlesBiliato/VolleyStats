@@ -15,10 +15,10 @@ const context=await browser.newContext({viewport:{width:1024,height:600}});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
 const url=`http://127.0.0.1:${server.address().port}`;
 const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')));
-async function reset(s=initial()) {
+async function reset(s=initial(),rosterName='Plantilla test') {
  s.demo=false;
  await page.goto(url);
- await page.evaluate(s=>{
+ await page.evaluate(({s,rosterName})=>{
   localStorage.clear();
   localStorage.setItem('volleystats.match.v1',JSON.stringify(s));
   localStorage.setItem(
@@ -26,12 +26,12 @@ async function reset(s=initial()) {
    JSON.stringify([
     {
      id:'test-roster',
-     name:'Plantilla test',
+     name:rosterName,
      players:s.roster,
     },
    ]),
   );
- },s);
+ },{s,rosterName});
  await page.reload();
  await page.locator('.court').waitFor();
 }
@@ -482,6 +482,33 @@ try{
   for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');await assertPlayerReadability();}
   const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await page.setViewportSize({width:768,height:1024});await tap('next');await page.locator('.setup-court').waitFor();await assertZoneLayout('.setup-court');
  });
+ await check('Encabezado real por sede, estados, recarga y nombres largos',async()=>{
+  const local=initial();local.rosterId='test-roster';local.rival='Rival Norte';local.venue='Local';
+  await reset(local,'Equipo Casa');
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Equipo Casa vs Rival Norte');
+  assert.doesNotMatch(await page.locator('.match-title').innerText(),/Nosotros|Partido 3/);
+  await page.reload();await page.locator('.court').waitFor();
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Equipo Casa vs Rival Norte');
+
+  const visitor=initial();visitor.rosterId='test-roster';visitor.rosterName='Equipo Visitante Histórico';visitor.rival='Club Local';visitor.venue='Visitante';
+  await reset(visitor,'Nombre actual distinto');
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Club Local vs Equipo Visitante Histórico');
+
+  visitor.status='between';visitor.finishedSets=[{set:1,score:[25,20]}];
+  await reset(visitor,'Nombre actual distinto');
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Club Local vs Equipo Visitante Histórico');
+  visitor.status='finished';
+  await reset(visitor,'Nombre actual distinto');
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Club Local vs Equipo Visitante Histórico');
+
+  const long=initial();long.rosterId='test-roster';long.rosterName='Club Deportivo Voleibol Ciudad Universitaria';long.rival='Asociación Atlética Metropolitana del Norte';long.venue='Visitante';
+  await reset(long,'Nombre que no debe sustituir la copia histórica');
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(()=>{const title=document.querySelector('.match-title').getBoundingClientRect(),button=document.querySelector('.page-heading > button').getBoundingClientRect();return {visible:title.width>0&&title.height>0,inside:title.left>=0&&title.right<=innerWidth+1&&title.top>=0&&title.bottom<=innerHeight+1,overlap:!(title.right<=button.left||button.right<=title.left||title.bottom<=button.top||button.bottom<=title.top),horizontalOverflow:document.documentElement.scrollWidth>innerWidth};});
+   equal(layout,{visible:true,inside:true,overlap:false,horizontalOverflow:false});
+  }
+ });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);
   for(const [width,height] of [[1024,600],[1280,800],[1024,768],[1180,720],[800,1280],[768,1024],[600,960],[1366,640]]){
@@ -682,12 +709,14 @@ try{
   assert.equal(created.serving,true);
   assert.equal(created.activeLiberoId,1);
   assert.equal(created.rosterId,'setup-roster');
+  assert.equal(created.rosterName,'Setup');
   assert.equal(created.rival,'Rival setup');
   assert.equal(created.date,'2026-09-24');
   assert.equal(created.time,'18:00');
   assert.equal(created.venue,'Local');
   equal(created.score,[0,0]);
   assert.equal(created.setStarts[0].serving,true);
+  equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Setup vs Rival setup');
 
   await tap('theirs');
   await commit('ours');

@@ -1167,10 +1167,21 @@ body {
   margin: 0;
   flex-shrink: 0;
   min-width: 0;
+  gap: 16px;
+}
+#app .page-heading > div {
+  min-width: 0;
+}
+#app .page-heading > button {
+  flex: 0 0 auto;
 }
 #app h1 {
   font-size: clamp(20px, 2.6dvh, 27px);
   margin-top: 4px;
+}
+#app .match-title {
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 #app .match-grid {
   flex: 1;

@@ -113,6 +113,33 @@ const esc = (s) =>
       ],
   );
 const player = (id) => state.roster.find((p) => p.id === id);
+function rosterMatchesMatch(roster, match) {
+  return roster.players.length === match.roster.length &&
+    roster.players.every((player) => {
+      const matchPlayer = match.roster.find((item) => item.id === player.id);
+      return matchPlayer &&
+        matchPlayer.name === player.name &&
+        matchPlayer.role === player.role;
+    });
+}
+function rosterNameForMatch(match) {
+  const historicalName =
+    typeof match.rosterName === "string" ? match.rosterName.trim() : "";
+  if (historicalName) return historicalName;
+
+  const linkedRoster =
+    typeof match.rosterId === "string"
+      ? savedRosters.find((roster) => roster.id === match.rosterId)
+      : savedRosters.find((roster) => rosterMatchesMatch(roster, match));
+  return linkedRoster?.name.trim() || "Nuestro equipo";
+}
+function matchHeading() {
+  const ours = esc(rosterNameForMatch(state));
+  const rival = esc(state.rival);
+  return state.venue === "Visitante"
+    ? `${rival} <span>vs</span> ${ours}`
+    : `${ours} <span>vs</span> ${rival}`;
+}
 const isActiveLibero = (id) =>
   id === state.activeLiberoId && player(id)?.role === "Líbero";
 const unforcedReasons = [
@@ -1120,10 +1147,10 @@ function render() {
             ${esc(state.venue)}
           </div>
 
-          <h1>
+          <h1${page === "match" ? ' class="match-title"' : ""}>
             ${
               page === "match"
-                ? `Nosotros <span>vs.</span> ${esc(state.rival)}`
+                ? matchHeading()
                 : page === "roster"
                   ? "Nuestra plantilla"
                   : "Historial de partido"
@@ -1627,6 +1654,10 @@ document.addEventListener("click", (e) => {
     next.time = matchDraft.time;
     next.venue = matchDraft.venue === "home" ? "Local" : "Visitante";
     next.rosterId = selectedRosterId;
+    const selectedRoster = savedRosters.find(
+      (roster) => roster.id === selectedRosterId,
+    );
+    if (selectedRoster) next.rosterName = selectedRoster.name;
     activateMatch(next);
     return;
   }
