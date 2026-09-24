@@ -1,4 +1,4 @@
-const CACHE = "volleystats-shell-v3";
+const CACHE = "volleystats-shell-v4";
 const CACHE_PREFIXES = ["volleytrack-shell-", "volleystats-shell-"];
 
 const ASSETS = [

@@ -15,13 +15,35 @@ const context=await browser.newContext({viewport:{width:1024,height:600}});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
 const url=`http://127.0.0.1:${server.address().port}`;
 const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')));
-async function reset(s=initial()) {await page.goto(url);await page.evaluate(s=>localStorage.setItem('volleystats.match.v1',JSON.stringify(s)),s);await page.reload();await page.locator('.court').waitFor();}
+async function reset(s=initial()) {s.demo=false;await page.goto(url);await page.evaluate(s=>localStorage.setItem('volleystats.match.v1',JSON.stringify(s)),s);await page.reload();await page.locator('.court').waitFor();}
 async function tap(cmd){await page.locator(`[data-cmd="${cmd}"]`).first().click();}
 async function commit(cmd){await page.waitForTimeout(420);await tap(cmd);}
 async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
 try{
+ await check('Primera entrada, plantilla propia, alineación, recarga y archivo',async()=>{
+  await page.goto(url);await page.evaluate(()=>localStorage.clear());await page.reload();
+  assert.match(await page.locator('main').innerText(),/Bienvenido/);equal(await state(),null);
+  for(let id=21;id<=26;id++){
+   await tap('add-roster-player');await page.locator('[name="id"]').fill(String(id));await page.locator('[name="name"]').fill('Jugador '+id);
+   await page.selectOption('[name="role"]','Receptor');await tap('save-roster-player');
+  }
+  await page.reload();assert.match(await page.locator('main').innerText(),/6 jugadores guardados/);
+  await page.locator('[name="rival"]').fill('Rival real');
+  for(let zone=1;zone<=6;zone++)await page.selectOption('[name="zone'+zone+'"]',String(20+zone));
+  await page.selectOption('[name="serving"]','ours');
+  await page.selectOption('[name="zone6"]','21');await page.locator('#match-setup button[type="submit"]').click();
+  equal(await state(),null);assert.match(await page.locator('#toast').innerText(),/distintos/);
+  await page.selectOption('[name="zone6"]','26');await page.locator('#match-setup button[type="submit"]').click();
+  const created=await state();equal(created.demo,false);equal(created.lineup,[21,22,23,24,25,26]);equal(created.serving,true);equal(created.score,[0,0]);
+  await tap('player:21');await tap('action:Ataque');await tap('grade:-');await page.reload();equal((await state()).events[0].grade,'-');equal((await state()).score,[0,0]);
+  await tap('new-match');await page.locator('[name="rival"]').fill('Segundo rival');
+  for(let zone=1;zone<=6;zone++)await page.selectOption('[name="zone'+zone+'"]',String(20+zone));
+  await page.selectOption('[name="serving"]','theirs');await page.locator('#match-setup button[type="submit"]').click();
+  equal((await state()).serving,false);await tap('new-match');await tap('resume-match:'+created.id);equal((await state()).events.length,1);
+  await page.evaluate(()=>localStorage.clear());
+ });
  await check('Puntos, recuperacion del saque, doble toque y deshacer',async()=>{
   await reset();const before=await state();await tap('ours');let s=await state();equal(s.score,[1,0]);equal(s.rotation,2);equal(s.lineup,[9,12,7,8,15,4]);
   await page.waitForTimeout(420);await page.locator('[data-cmd="ours"]').dblclick();equal((await state()).score,[2,0]);
@@ -124,7 +146,7 @@ try{
   await page.evaluate(()=>{Storage.prototype.setItem=window.originalSetItem});await commit('ours');equal((await state()).score,[1,0]);assert.match(await page.locator('.save-state').innerText(),/Guardado en este dispositivo/);
  });
  await check('Migracion de VolleyTrack a VolleyStats',async()=>{
-  const legacy=initial();
+  const legacy=initial();legacy.demo=false;
   await page.goto(url);
   await page.evaluate(s=>{
     localStorage.clear();
@@ -138,7 +160,9 @@ try{
   assert(await page.evaluate(()=>localStorage.getItem('volleystats.roster.v1')!==null));
  });
  await check('Datos guardados invalidos no dejan la pantalla en blanco',async()=>{
-  await reset();await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('volleystats.match.v1'));s.lineup[0]=999;localStorage.setItem('volleystats.match.v1',JSON.stringify(s))});await page.reload();await page.locator('.court').waitFor({timeout:3000});assert.match(await page.locator('.save-state').innerText(),/Guardado no disponible/);await tap('ours');equal((await state()).lineup[0],999);assert.match(await page.locator('#toast').innerText(),/No se pudo guardar/);
+  await reset();await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('volleystats.match.v1'));s.lineup[0]=999;localStorage.setItem('volleystats.match.v1',JSON.stringify(s))});await page.reload();await page.locator('.setup-card').waitFor({timeout:3000});assert.match(await page.locator('[role="alert"]').innerText(),/almacenamiento/);
+  await page.locator('[name="rival"]').fill('Nuevo rival');const ids=await page.locator('[name="zone1"] option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));
+  for(let i=1;i<=6;i++)await page.selectOption('[name="zone'+i+'"]',ids[i-1]);await page.selectOption('[name="serving"]','ours');await page.locator('#match-setup button[type="submit"]').click();equal((await state()).lineup[0],999);assert.match(await page.locator('#toast').innerText(),/no se puede leer/);
  });
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));
  if(results.some(r=>!r.ok)||errors.length)process.exitCode=1;

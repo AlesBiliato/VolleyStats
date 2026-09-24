@@ -117,6 +117,22 @@ export function saveMatch(match) {
   localStorage.setItem(MATCH_KEY, JSON.stringify(match));
 }
 
+export function loadArchives() {
+  const data = JSON.parse(localStorage.getItem("volleystats.archives.v1") || "[]");
+  if (!Array.isArray(data) || !data.every(validMatch)) throw Error("No se pueden leer los partidos guardados.");
+  return data;
+}
+
+export function replaceMatch(next) {
+  const previous = loadMatch();
+  if (previous && previous.id !== next.id) {
+    const archives = loadArchives().filter(match => match.id !== previous.id);
+    archives.push(previous);
+    localStorage.setItem("volleystats.archives.v1", JSON.stringify(archives));
+  }
+  saveMatch(next);
+}
+
 export function loadRoster() {
   let value = localStorage.getItem(ROSTER_KEY);
   let legacy = false;

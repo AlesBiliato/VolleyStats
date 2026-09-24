@@ -1,22 +1,26 @@
 import { correctEvent, grades } from "./corrections.js";
 import { statistics, percent } from "./statistics.js";
 
-import { initial, transition, roster as defaultRoster } from "./domain.js";
-import { loadMatch, saveMatch, loadRoster, saveRoster } from "./storage.js";
+import { initial, transition, createMatch } from "./domain.js";
+import { loadMatch, saveMatch, loadRoster, saveRoster, loadArchives, replaceMatch } from "./storage.js";
 let teamRoster;
 let state;
 let storageError = false;
 let storageBlocked = false;
+let hasMatch = false;
 
 try {
-  teamRoster = loadRoster() || structuredClone(defaultRoster);
+  teamRoster = loadRoster() || [];
 } catch {
   storageError = true;
-  teamRoster = structuredClone(defaultRoster);
+  teamRoster = [];
 }
 
 try {
-  state = loadMatch() || initial();
+  const saved = loadMatch();
+  hasMatch = Boolean(saved);
+  state = saved || initial();
+  if (!teamRoster.length && saved && !saved.demo) teamRoster = structuredClone(saved.roster);
 } catch {
   storageError = true;
   storageBlocked = true;
@@ -26,7 +30,7 @@ let statsTab = "General",
   statsSet = "all",
   periodOpen = false,
   pendingCorrection = null;
-let page = "match",
+let page = hasMatch && state.demo ? "setup" : "match",
   selected = null,
   action = null,
   lastTap = 0;
@@ -133,7 +137,59 @@ function court() {
     )
     .join("")}</div></div></section>`;
 }
+function renderSetup() {
+  const eligible = teamRoster.filter(p => p.role !== "Líbero");
+  let archives = [];
+  try { archives = loadArchives(); } catch { storageError = true; }
+  app.innerHTML = `<header><a class="brand" href="#" data-cmd="nav:match">VolleyStats</a></header>
+    <main><section class="wide-card setup-card"><h1>${hasMatch ? "Preparar otro partido" : "Bienvenido a VolleyStats"}</h1>
+    <p>Guarda tu plantilla en este dispositivo y elige la alineación inicial de cada partido.</p>
+    ${storageError ? '<p role="alert">Hay un problema con el almacenamiento. No borres los datos del navegador.</p>' : ""}
+    <h2>1. Tu plantilla</h2><p>${teamRoster.length} jugadores guardados · ${eligible.length} disponibles para el sexteto inicial.</p>
+    <div class="dialog-actions">${button("Gestionar plantilla", "nav:roster")}${button("Añadir jugador", "add-roster-player", "primary")}</div>
+    <h2>2. Preparar partido</h2>
+    ${eligible.length < 6 ? '<p>Añade al menos seis jugadores que no sean líberos para elegir la alineación.</p>' : `<form id="match-setup">
+      <label>Equipo rival<input name="rival" maxlength="80" required placeholder="Nombre del rival"></label>
+      <p>Selecciona un jugador distinto en cada zona. Zona 1: zaguero derecho; zonas 2, 3 y 4: delanteros; zonas 5 y 6: zagueros.</p>
+      <div class="setup-lineup">${Array.from({length:6}, (_, i) => `<label>Zona ${i + 1}<select name="zone${i + 1}" required><option value="">Seleccionar jugador</option>${eligible.map(p => `<option value="${p.id}">#${p.id} · ${esc(p.name)} · ${esc(p.role)}</option>`).join("")}</select></label>`).join("")}</div>
+      <label>Saque inicial<select name="serving" required><option value="">Elige quién saca</option><option value="ours">Sacamos nosotros</option><option value="theirs">Saca el rival</option></select></label>
+      ${hasMatch ? '<p>El partido actual se conservará en los partidos guardados de este dispositivo.</p>' : ""}
+      <button class="primary full" type="submit">Iniciar partido</button></form>`}
+    ${hasMatch ? button("Volver al partido actual", "nav:match", "full") : ""}
+    ${archives.length ? `<h2>Partidos guardados</h2>${archives.filter(m => m.id !== state.id).map(m => button(`${esc(m.rival)} · ${esc(m.date)} · ${m.score.join("–")}`, "resume-match:" + m.id, "full")).join("")}` : ""}
+    <p class="muted">Los datos se guardan en este navegador. No se sincronizan entre dispositivos.</p></section></main>`;
+}
+function activateMatch(next) {
+  try {
+    if (storageBlocked) throw Error("El partido guardado no se puede leer. No se sobrescribirá.");
+    replaceMatch(next);
+  } catch (error) { toast(error.message || "No se pudo guardar el partido."); return; }
+  state = next;
+  hasMatch = true;
+  page = "match";
+  statsSet = "all";
+  pendingCorrection = null;
+  selected = action = null;
+  lastTap = 0;
+  modal.close();
+  render();
+}
+document.addEventListener("submit", e => {
+  if (e.target.id !== "match-setup") return;
+  e.preventDefault();
+  const data = new FormData(e.target);
+  try {
+    const serving = data.get("serving");
+    if (!["ours", "theirs"].includes(serving)) throw Error("Elige el saque inicial.");
+    activateMatch(createMatch({team: teamRoster, rival: data.get("rival"),
+      lineup: Array.from({length:6}, (_, i) => Number(data.get("zone" + (i + 1)))), serving: serving === "ours"}));
+  } catch (error) { toast(error.message); }
+});
 function render() {
+  if ((!hasMatch && page !== "roster") || page === "setup") {
+    renderSetup();
+    return;
+  }
   app.innerHTML = `
     <header>
       <a class="brand" href="#" data-cmd="nav:match">
@@ -172,7 +228,7 @@ function render() {
           </h1>
         </div>
 
-        <span class="demo-badge">MVP · Datos de ejemplo</span>
+        ${button(hasMatch ? "Nuevo partido" : "Preparar partido", "new-match")}
       </div>
 
       ${
@@ -245,7 +301,7 @@ function render() {
             `
             : `
               <section class="wide-card">
-                <h2>Partido de prueba actual</h2>
+                <h2>${state.demo ? "Partido de ejemplo guardado" : "Partido actual"}</h2>
                 <p>
                   Edita o elimina registros. Los marcadores y las estadísticas
                   se recalculan al guardar.
@@ -361,6 +417,12 @@ document.addEventListener("click", (e) => {
   if (!target) return;
   e.preventDefault();
   const [cmd, value] = target.dataset.cmd.split(":");
+  if (cmd === "new-match") { page = "setup"; render(); return; }
+  if (cmd === "resume-match") {
+    try { const saved = loadArchives().find(m => m.id === value); if (saved) activateMatch(saved); }
+    catch (error) { toast(error.message); }
+    return;
+  }
   if (cmd === "close") {
     modal.close();
     return;
@@ -866,7 +928,7 @@ function previewCorrection(index, command) {
 document.addEventListener("change", (e) => {
   if (e.target.id === "edit-action") {
     document.querySelector("#edit-grade").innerHTML = grades[e.target.value]
-      .map((g) => `<option>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
+      .map((g) => `<option value="${g}">${e.target.value === "Ataque" && g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
       .join("");
   }
 });
