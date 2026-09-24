@@ -115,6 +115,11 @@ const esc = (s) =>
 const player = (id) => state.roster.find((p) => p.id === id);
 const isActiveLibero = (id) =>
   id === state.activeLiberoId && player(id)?.role === "Líbero";
+const unforcedReasons = [
+  ["rotation", "Falta de rotación"],
+  ["net", "Toque de red"],
+  ["other", "Otros"],
+];
 const button = (label, cmd, cls = "", disabled = false) =>
   `<button class="${cls}" data-cmd="${cmd}" ${disabled ? "disabled" : ""}>${label}</button>`;
 function toast(s) {
@@ -2212,14 +2217,12 @@ document.addEventListener("click", (e) => {
     if (state.status !== "playing") return;
     show(
       "Errores nuestros NO forzados",
-      `<p>Elige el motivo. Se sumará un punto al rival.</p><div class="action-options">${button("Falta de rotación", "record-unforced:rotation")}${button("Toque de red", "record-unforced:net")}</div>`,
+      `<p>Elige el motivo. Se sumará un punto al rival.</p><div class="action-options">${unforcedReasons.map(([value, label]) => button(label, `record-unforced:${value}`)).join("")}</div>`,
     );
     return;
   }
   if (cmd === "record-unforced") {
-    const reason = { rotation: "Falta de rotación", net: "Toque de red" }[
-      value
-    ];
+    const reason = unforcedReasons.find(([reason]) => reason === value)?.[1];
     if (!reason) return;
     commit({
       type: "point",
@@ -2382,6 +2385,7 @@ function statsBody(tab) {
         ["Errores nuestros no forzados", s.unforced],
         ["Faltas de rotación", s.rotationErrors],
         ["Toques de red", s.netErrors],
+        ["Otros", s.otherErrors],
       ],
       ["Total", s.unforced],
     )}<p class="muted">Solo se cuentan los registros del periodo seleccionado. Los puntos manuales no se atribuyen a un jugador.</p>`;
@@ -2485,8 +2489,10 @@ const pointOptions = [
   ["theirs", "Punto para el rival"],
   ["serve", "Error de saque rival"],
   ["attack", "Error de ataque rival"],
-  ["rotation", "Error nuestro no forzado · Falta de rotación"],
-  ["net", "Error nuestro no forzado · Toque de red"],
+  ...unforcedReasons.map(([value, label]) => [
+    value,
+    `Error nuestro no forzado · ${label}`,
+  ]),
 ];
 function editEvent(index) {
   const e = state.events[index];
@@ -2580,12 +2586,13 @@ document.addEventListener(
 
     if (original.type === "point") {
       const kind = data.get("kind");
+      const isUnforced = unforcedReasons.some(([reason]) => reason === kind);
 
-      command.team = ["theirs", "rotation", "net"].includes(kind) ? 1 : 0;
+      command.team = kind === "theirs" || isUnforced ? 1 : 0;
 
       command.label = pointOptions.find((p) => p[0] === kind)[1];
 
-      if (["rotation", "net"].includes(kind)) {
+      if (isUnforced) {
         command.category = "unforced-error";
         command.reason = kind;
       }

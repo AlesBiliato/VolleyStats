@@ -326,11 +326,17 @@ try{
   await commit('theirs');s=await state();equal(s.score,[2,1]);equal(s.serving,false);equal(s.rotation,2);
   await undo();equal((await state()).score,[2,0]);await undo();await undo();equal(await state(),before);
  });
- await check('Errores rivales y los dos errores nuestros, historial y persistencia',async()=>{
+ await check('Errores rivales y errores nuestros, historial, correccion y persistencia',async()=>{
   await reset();await tap('serve-error');await commit('attack-error');equal((await state()).score,[2,0]);
-  for(const reason of ['rotation','net']){await tap('unforced-error');await commit('record-unforced:'+reason);const s=await state();equal(s.events.at(-1).reason,reason);equal(s.serving,false);equal(s.rotation,2);}
-  equal((await state()).score,[2,2]);const saved=await state();await page.reload();equal(await state(),saved);
-  await tap('history');assert.match(await page.locator('#modal').innerText(),/Falta de rotación/);assert.match(await page.locator('#modal').innerText(),/Toque de red/);await tap('close');
+  for(const reason of ['rotation','net']){await tap('unforced-error');await commit('record-unforced:'+reason);const s=await state();equal(s.events.at(-1).reason,reason);equal(s.events.at(-1).category,'unforced-error');equal(s.serving,false);equal(s.rotation,2);}
+  const beforeOther=await state();await tap('unforced-error');assert.match(await page.locator('#modal').innerText(),/Otros/);assert.equal(await page.locator('[data-cmd="record-unforced:other"]').count(),1);await commit('record-unforced:other');
+  let otherState=await state();equal(otherState.score,[2,3]);equal(otherState.serving,false);equal(otherState.rotation,beforeOther.rotation);equal(otherState.events.at(-1).category,'unforced-error');equal(otherState.events.at(-1).reason,'other');assert.match(otherState.events.at(-1).label,/Otros/);
+  await undo();equal(await state(),beforeOther);await tap('unforced-error');await commit('record-unforced:other');
+  const saved=await state();await page.reload();equal(await state(),saved);
+  await tap('history');const historyText=await page.locator('#modal').innerText();assert.match(historyText,/Falta de rotación/);assert.match(historyText,/Toque de red/);assert.match(historyText,/Otros/);
+  await tap('edit-event:4');assert.equal(await page.locator('[name="kind"]').inputValue(),'other');assert.equal(await page.locator('[name="kind"] option[value="other"]').count(),1);await page.locator('#edit-form button').click();await tap('confirm-correction');
+  otherState=await state();equal(otherState.events.at(-1).reason,'other');equal(otherState.events.at(-1).category,'unforced-error');
+  await tap('stats');await tap('stat-tab:Errores');assert.match(await page.locator('#stat-body').innerText(),/Otros\s+1/);await tap('close');
  });
  await check('Libero activo seleccionable y banquillo sin duplicados',async()=>{
   const withLibero=initial();withLibero.activeLiberoId=1;withLibero.setStarts[0].activeLiberoId=1;

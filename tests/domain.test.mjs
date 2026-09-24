@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createMatch,initial,transition} from '../src/domain.js';
 test('Errores no forzados ceden punto y saque sin rotar, y se deshacen completos',()=>{
- for(const reason of ['rotation','net'])for(const serving of [true,false]){
+ for(const reason of ['rotation','net','other'])for(const serving of [true,false]){
   const s=initial();s.serving=serving;
   const n=transition(s,{type:'point',team:1,category:'unforced-error',reason,label:'Error nuestro'});
   assert.deepEqual(n.score,[0,1]);assert.equal(n.serving,false);assert.equal(n.rotation,s.rotation);assert.deepEqual(n.lineup,s.lineup);
