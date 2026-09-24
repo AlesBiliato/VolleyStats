@@ -428,24 +428,12 @@ function liberoSetupContent() {
 function finalSetupContent() {
   const names = setLineupDraft.map((id) => setupPlayerById(id));
   const libero = matchDraft.activeLiberoId === null ? "Sin líbero" : `#${setupPlayerById(matchDraft.activeLiberoId)?.id} ${esc(setupPlayerById(matchDraft.activeLiberoId)?.name || "")}`;
-  return `<section class="setup-section setup-final"><h2>Confirmar titular y saque</h2><div class="setup-summary"><p><b>Sexteto titular:</b> ${names.map((p, i) => `Zona ${i + 1}: #${p.id} ${esc(p.name)}`).join(" · ")}</p><p><b>Líbero activo:</b> ${libero}</p></div><h3>¿Quién empieza sacando?</h3><div class="setup-choice-grid">${button("Nosotros", "set-serving:ours", matchDraft.serving === true ? "choice selected" : "choice")}${button("Rival", "set-serving:theirs", matchDraft.serving === false ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Modificar alineación", "back-to-lineup")}${button("Empezar partido", "start-match", "primary", typeof matchDraft.serving !== "boolean")}</div></section>`;
+  return `<section class="setup-section setup-final"><h2>Confirmar titular y saque</h2><div class="setup-summary"><p><b>Sexteto titular:</b> ${names.map((p, i) => `Zona ${i + 1}: #${p.id} ${esc(p.name)}`).join(" · ")}</p><p><b>Líbero activo:</b> ${libero}</p></div><h3>¿Quién empieza sacando?</h3><div class="setup-choice-grid">${button("Nosotros", "set-serving:ours", matchDraft.serving === true ? "choice selected" : "choice")}${button("Rival", "set-serving:theirs", matchDraft.serving === false ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Modificar alineación", "back-to-lineup")}${button("Volver al líbero", "back-to-libero")}${button("Empezar partido", "start-match", "primary", typeof matchDraft.serving !== "boolean")}</div></section>`;
 }
 
-function matchSetupContent() {
-  const selectedRoster =
-    savedRosters.find((roster) => roster.id === selectedRosterId) || null;
-
-  const rosterName = selectedRoster?.name || "Plantilla seleccionada";
-
-  if (setupStep === "lineup" && matchDraft) {
-    return setOneLineupContent();
-  }
-  if (setupStep === "libero" && matchDraft) return liberoSetupContent();
-  if (setupStep === "confirm" && matchDraft) return finalSetupContent();
-
-  if (setupStep === "summary" && matchDraft) {
-    return `
-      <section class="setup-section">
+function matchSummaryContent(rosterName) {
+  return `
+      <section class="setup-section setup-summary-view">
         <h2>2. Resumen del partido</h2>
 
         <div class="setup-summary">
@@ -476,16 +464,21 @@ function matchSetupContent() {
         </p>
       </section>
     `;
-  }
+}
 
+function matchBasicsContent(rosterName) {
   const rival = matchDraft?.rival || "";
   const date = matchDraft?.date || "";
   const time = matchDraft?.time || "";
   const venue = matchDraft?.venue || "";
 
   return `
-    <section class="setup-section">
+    <section class="setup-section setup-basics-view">
       <h2>2. Datos del partido</h2>
+      <div class="setup-roster-reference">
+        <span>Plantilla: <b>${esc(rosterName)}</b></span>
+        ${button("Gestionar plantilla", "manage-roster")}
+      </div>
 
       <form id="match-basics-form">
       <div class="setup-lineup">
@@ -582,6 +575,19 @@ function matchSetupContent() {
       </form>
     </section>
   `;
+}
+
+function matchSetupContent() {
+  const selectedRoster =
+    savedRosters.find((roster) => roster.id === selectedRosterId) || null;
+  const rosterName = selectedRoster?.name || "Plantilla seleccionada";
+
+  if (setupStep === "summary" && matchDraft)
+    return matchSummaryContent(rosterName);
+  if (setupStep === "lineup" && matchDraft) return setOneLineupContent();
+  if (setupStep === "libero" && matchDraft) return liberoSetupContent();
+  if (setupStep === "confirm" && matchDraft) return finalSetupContent();
+  return matchBasicsContent(rosterName);
 }
 
 function formatDateLabel(value) {
@@ -844,45 +850,19 @@ function renderSetup() {
     return;
   }
 
-  const eligible = teamRoster.filter(p => p.role !== "Líbero");
-  let archives = [];
-  try { archives = loadArchives(); } catch { storageError = true; }
-  app.innerHTML = `<header><a class="brand" href="#" data-cmd="nav:match">VolleyStats</a></header>
-    <main><section class="wide-card setup-card"><h1>${hasMatch ? "Preparar otro partido" : "Bienvenido a VolleyStats"}</h1>
-    <p>Guarda tu plantilla en este dispositivo y elige la alineación inicial de cada partido.</p>
-    ${storageError ? '<p role="alert">Hay un problema con el almacenamiento. No borres los datos del navegador.</p>' : ""}
-    <h2>1. Tu plantilla</h2>
-    <p>${teamRoster.length} ${teamRoster.length === 1 ? "jugador a\u00f1adido" : "jugadores a\u00f1adidos"}.</p>
-
-    ${
-      teamRoster.length
-        ? `<div class="roster-grid">
-            ${[...teamRoster]
-              .sort((a, b) => a.id - b.id)
-              .map(
-                (p) => `
-                  <article class="${p.role === "Líbero" ? "libero-player" : ""}">
-                    <b>${p.id}</b>
-                    <div>
-                      <h3>${esc(p.name)}</h3>
-                      <p>${esc(p.role)}</p>
-                    </div>
-                  </article>
-                `,
-              )
-              .join("")}
-          </div>`
-        : `<p class="muted">Todav\u00eda no has a\u00f1adido ning\u00fan jugador.</p>`
-    }
-
-    <div class="dialog-actions">
-      ${button("Gestionar plantilla", "manage-roster")}
-      ${button("A\u00f1adir jugador", "add-roster-player", "primary")}
-    </div>
-    ${matchSetupContent()}
-    ${hasMatch ? button("Volver al partido actual", "nav:match", "full") : ""}
-    ${archives.length ? `<h2>Partidos guardados</h2>${archives.filter(m => m.id !== state.id).map(m => button(`${esc(m.rival)} ? ${esc(m.date)} ? ${m.score.join("?")}`, "resume-match:" + m.id, "full")).join("")}` : ""}
-    <p class="muted">Los datos se guardan en este navegador. No se sincronizan entre dispositivos.</p></section></main>`;
+  app.innerHTML = `
+    <header>
+      <a class="brand" href="#" data-cmd="nav:match">
+        <span class="brand-mark">V</span>Volley<span>Stats</span>
+      </a>
+      <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Borrador local"}</div>
+    </header>
+    <main class="setup-stage setup-stage-${setupStep}">
+      <section class="wide-card setup-card">
+        ${storageError ? '<p role="alert">Hay un problema con el almacenamiento. No borres los datos del navegador.</p>' : ""}
+        ${matchSetupContent()}
+      </section>
+    </main>`;
 }
 function activateMatch(next) {
   try {
@@ -1492,8 +1472,11 @@ document.addEventListener("click", (e) => {
   if (cmd === "continue-lineup") {
     sanitizeSetLineupDraft();
     if (setLineupDraft.some((id) => id === null)) return;
-    matchDraft.activeLiberoId = undefined;
-    matchDraft.serving = undefined;
+    if (
+      matchDraft.activeLiberoId !== null &&
+      matchDraft.activeLiberoId !== undefined &&
+      !teamRoster.some((player) => player.id === matchDraft.activeLiberoId && player.role === "Líbero")
+    ) matchDraft.activeLiberoId = undefined;
     setupStep = "libero";
     if (!teamRoster.some((player) => player.role === "Líbero")) matchDraft.activeLiberoId = null;
     render();
@@ -1502,6 +1485,12 @@ document.addEventListener("click", (e) => {
 
   if (cmd === "back-to-lineup") {
     setupStep = "lineup";
+    render();
+    return;
+  }
+
+  if (cmd === "back-to-libero") {
+    setupStep = "libero";
     render();
     return;
   }

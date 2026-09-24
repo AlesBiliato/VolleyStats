@@ -1878,6 +1878,32 @@ dialog.stats-dialog {
 .setup-card h2 { margin-top: 24px; }
 .setup-card p { line-height: 1.6; }
 
+.setup-stage {
+  align-items: flex-start;
+}
+
+.setup-stage-lineup .setup-card {
+  max-width: 1080px;
+}
+
+.setup-card > .setup-section {
+  margin-top: 0;
+}
+
+.setup-roster-reference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: #718166;
+  font-size: 12px;
+}
+
 .setup-section {
   margin-top: 24px;
   padding: 20px;
@@ -2165,6 +2191,11 @@ dialog.stats-dialog {
 }
 
 @media (max-width: 480px) {
+  .setup-roster-reference {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .setup-lineup,
   .setup-summary {
     grid-template-columns: 1fr;
