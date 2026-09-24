@@ -18,6 +18,7 @@ let timePickerHour = "18";
 let timePickerMinute = "00";
 let returnToSetupAfterRoster = false;
 let setLineupDraft = Array(6).fill(null);
+let preparingSetNumber = 1;
 
 try {
   savedRosters = loadRosters();
@@ -235,7 +236,7 @@ function setupPlayerById(playerId) {
   );
 }
 
-function lineupPlayerPickerBody(zone) {
+function lineupPlayerPickerBody(zone, setNumber = preparingSetNumber) {
   sanitizeSetLineupDraft();
 
   const currentPlayerId =
@@ -260,7 +261,7 @@ function lineupPlayerPickerBody(zone) {
   return `
     <div class="lineup-picker">
       <p>
-        Elige el jugador que empieza el Set 1
+        Elige el jugador que empieza el Set ${setNumber}
         en la zona ${zone}.
       </p>
 
@@ -305,7 +306,7 @@ function lineupPlayerPickerBody(zone) {
   `;
 }
 
-function setOneLineupContent() {
+function setLineupContent(setNumber = preparingSetNumber) {
   sanitizeSetLineupDraft();
 
   const visualZones = [4, 3, 2, 5, 6, 1];
@@ -319,7 +320,7 @@ function setOneLineupContent() {
       <div class="set-lineup-heading">
         <div>
           <span class="eyebrow">ALINEACIÓN INICIAL</span>
-          <h2>3. Preparar Set 1</h2>
+          <h2>Preparar Set ${setNumber}</h2>
 
           <p>
             Toca una zona de la pista y elige el jugador
@@ -411,8 +412,8 @@ function setOneLineupContent() {
       <div class="dialog-actions">
         ${button("Continuar", "continue-lineup", "primary", completed !== 6)}
         ${button(
-          "Volver al resumen",
-          "back-to-match-summary",
+          setNumber === 1 ? "Volver al resumen" : `Volver al resultado del Set ${setNumber - 1}`,
+          setNumber === 1 ? "back-to-match-summary" : "cancel-set-preparation",
         )}
       </div>
     </section>
@@ -425,10 +426,11 @@ function liberoSetupContent() {
   return `<section class="setup-section"><h2>Elegir líbero</h2><p>Selecciona el líbero activo o confirma que jugaremos sin líbero.</p><div class="setup-choice-grid">${liberos.map((p) => button(`<b>#${p.id}</b> ${esc(p.name)} <small>${esc(p.role)}</small>`, `set-libero:${p.id}`, selected === p.id ? "choice selected" : "choice")).join("")}${button("Sin líbero", "set-libero:none", selected === null ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Volver a preparar el sexteto", "back-to-lineup")}${button("Continuar", "continue-libero", "primary", selected === undefined)}</div></section>`;
 }
 
-function finalSetupContent() {
+function finalSetupContent(setNumber = preparingSetNumber) {
   const names = setLineupDraft.map((id) => setupPlayerById(id));
   const libero = matchDraft.activeLiberoId === null ? "Sin líbero" : `#${setupPlayerById(matchDraft.activeLiberoId)?.id} ${esc(setupPlayerById(matchDraft.activeLiberoId)?.name || "")}`;
-  return `<section class="setup-section setup-final"><h2>Confirmar titular y saque</h2><div class="setup-summary"><p><b>Sexteto titular:</b> ${names.map((p, i) => `Zona ${i + 1}: #${p.id} ${esc(p.name)}`).join(" · ")}</p><p><b>Líbero activo:</b> ${libero}</p></div><h3>¿Quién empieza sacando?</h3><div class="setup-choice-grid">${button("Nosotros", "set-serving:ours", matchDraft.serving === true ? "choice selected" : "choice")}${button("Rival", "set-serving:theirs", matchDraft.serving === false ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Modificar alineación", "back-to-lineup")}${button("Volver al líbero", "back-to-libero")}${button("Empezar partido", "start-match", "primary", typeof matchDraft.serving !== "boolean")}</div></section>`;
+  const startLabel = setNumber === 1 ? "Empezar partido" : `Empezar Set ${setNumber}`;
+  return `<section class="setup-section setup-final"><h2>Confirmar titular y saque</h2><div class="setup-summary"><p><b>Sexteto titular:</b> ${names.map((p, i) => `Zona ${i + 1}: #${p.id} ${esc(p.name)}`).join(" · ")}</p><p><b>Líbero activo:</b> ${libero}</p></div><h3>¿Quién empieza sacando?</h3><div class="setup-choice-grid">${button("Nosotros", "set-serving:ours", matchDraft.serving === true ? "choice selected" : "choice")}${button("Rival", "set-serving:theirs", matchDraft.serving === false ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Modificar alineación", "back-to-lineup")}${button("Volver al líbero", "back-to-libero")}${button(startLabel, "start-match", "primary", typeof matchDraft.serving !== "boolean")}</div></section>`;
 }
 
 function matchSummaryContent(rosterName) {
@@ -584,7 +586,7 @@ function matchSetupContent() {
 
   if (setupStep === "summary" && matchDraft)
     return matchSummaryContent(rosterName);
-  if (setupStep === "lineup" && matchDraft) return setOneLineupContent();
+  if (setupStep === "lineup" && matchDraft) return setLineupContent();
   if (setupStep === "libero" && matchDraft) return liberoSetupContent();
   if (setupStep === "confirm" && matchDraft) return finalSetupContent();
   return matchBasicsContent(rosterName);
@@ -864,6 +866,25 @@ function renderSetup() {
       </section>
     </main>`;
 }
+
+function prepareNextSet() {
+  if (state.status !== "between" || state.set >= 5) return;
+  teamRoster = structuredClone(state.roster);
+  const previousStart = state.setStarts?.find((start) => start.set === state.set);
+  setLineupDraft = [...(previousStart?.lineup || state.lineup)];
+  matchDraft = {
+    ...(matchDraft || {}),
+    activeLiberoId: previousStart
+      ? previousStart.activeLiberoId
+      : (state.activeLiberoId ?? null),
+    serving: undefined,
+  };
+  preparingSetNumber = state.set + 1;
+  setupStep = "lineup";
+  page = "setup";
+  render();
+}
+
 function activateMatch(next) {
   try {
     if (storageBlocked) throw Error("El partido guardado no se puede leer. No se sobrescribirá.");
@@ -888,6 +909,7 @@ function activateMatch(next) {
 
   creatingRoster = false;
   hasMatch = true;
+  preparingSetNumber = 1;
   page = "match";
   statsSet = "all";
   pendingCorrection = null;
@@ -1278,6 +1300,7 @@ document.addEventListener("click", (e) => {
     returnToSetupAfterRoster = false;
     matchDraft = null;
     setLineupDraft = Array(6).fill(null);
+    preparingSetNumber = 1;
     setupStep = "basics";
     page = "setup";
     render();
@@ -1458,12 +1481,13 @@ document.addEventListener("click", (e) => {
 
     if (eligible.length < 6) {
       toast(
-        "Necesitas al menos seis jugadores que no sean l?beros.",
+        "Necesitas al menos seis jugadores que no sean líberos.",
       );
       return;
     }
 
     sanitizeSetLineupDraft();
+    preparingSetNumber = 1;
     setupStep = "lineup";
     render();
     return;
@@ -1521,6 +1545,24 @@ document.addEventListener("click", (e) => {
 
   if (cmd === "start-match") {
     if (setLineupDraft.some((id) => id === null) || typeof matchDraft.serving !== "boolean" || matchDraft.activeLiberoId === undefined) return;
+    if (preparingSetNumber > 1) {
+      const next = transition(state, {
+        type: "next",
+        lineup: [...setLineupDraft],
+        serving: matchDraft.serving,
+        activeLiberoId: matchDraft.activeLiberoId,
+        label: `Comienza el Set ${preparingSetNumber}`,
+      });
+      if (next === state) return;
+      page = "match";
+      if (!persist(next, `Set ${preparingSetNumber} preparado`)) {
+        page = "setup";
+        render();
+        return;
+      }
+      preparingSetNumber = 1;
+      return;
+    }
     let next;
     try {
       next = createMatch({ team: teamRoster, rival: matchDraft.rival, lineup: setLineupDraft, serving: matchDraft.serving, activeLiberoId: matchDraft.activeLiberoId });
@@ -1535,6 +1577,12 @@ document.addEventListener("click", (e) => {
 
   if (cmd === "back-to-match-summary") {
     setupStep = "summary";
+    render();
+    return;
+  }
+
+  if (cmd === "cancel-set-preparation") {
+    page = "match";
     render();
     return;
   }
@@ -2267,18 +2315,9 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "next") {
-    show(
-      "Preparar set " + (state.set + 1),
-      `<p>Se mantiene la alineación actual. La edición completa de la formación estará disponible en la siguiente fase.</p><p>¿Quién comienza sacando?</p><div class="dialog-actions">${button("Sacamos", "start:ours", "primary")}${button("Recibimos", "start:theirs")}</div>`,
-    );
+    prepareNextSet();
     return;
   }
-  if (cmd === "start")
-    commit({
-      type: "next",
-      serving: value === "ours",
-      label: `Comienza el set ${state.set + 1}`,
-    });
 });
 function statsDialog() {
   const periods = [
@@ -2536,6 +2575,8 @@ document.addEventListener(
 
     if (original.type === "next") {
       command.serving = data.get("serving") === "ours";
+      command.lineup = original.lineup ? [...original.lineup] : undefined;
+      command.activeLiberoId = original.activeLiberoId;
       command.label = `Comienza el set ${original.set + 1}`;
     }
 

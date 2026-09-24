@@ -54,6 +54,27 @@ function validSnapshot(data) {
     return false;
 
   const ids = new Set(data.roster.map((p) => p.id));
+  const setStartsValid =
+    data.setStarts === undefined ||
+    (Array.isArray(data.setStarts) &&
+      new Set(data.setStarts.map((start) => start?.set)).size === data.setStarts.length &&
+      data.setStarts.every(
+        (start) =>
+          start &&
+          Number.isInteger(start.set) &&
+          start.set >= 1 &&
+          start.set <= data.set &&
+          Array.isArray(start.lineup) &&
+          start.lineup.length === 6 &&
+          new Set(start.lineup).size === 6 &&
+          start.lineup.every((id) =>
+            data.roster.some((p) => p.id === id && p.role !== "Líbero"),
+          ) &&
+          (start.activeLiberoId === null ||
+            (Number.isInteger(start.activeLiberoId) &&
+              data.roster.some((p) => p.id === start.activeLiberoId && p.role === "Líbero"))) &&
+          (start.serving === undefined || typeof start.serving === "boolean"),
+      ));
 
   return (
     Array.isArray(data.lineup) &&
@@ -70,6 +91,7 @@ function validSnapshot(data) {
     typeof data.serving === "boolean" &&
     (data.activeLiberoId === undefined || data.activeLiberoId === null ||
       (Number.isInteger(data.activeLiberoId) && data.roster.some((p) => p.id === data.activeLiberoId && p.role === "Líbero"))) &&
+    setStartsValid &&
     ["playing", "between"].includes(data.status) &&
     Array.isArray(data.finishedSets) &&
     data.finishedSets.every(

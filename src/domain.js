@@ -25,6 +25,7 @@ export const initial = () => ({
   serving: false,
   activeLiberoId: null,
   lineup: [4, 9, 12, 7, 8, 15],
+  setStarts: [{ set: 1, lineup: [4, 9, 12, 7, 8, 15], activeLiberoId: null, serving: false }],
   finishedSets: [],
   status: "playing",
   events: [],
@@ -42,7 +43,8 @@ export function createMatch({ team, rival, lineup, serving, activeLiberoId = nul
     throw Error("El líbero activo no pertenece a la plantilla.");
   return { ...initial(), id: globalThis.crypto.randomUUID(), demo: false,
     rival: rival.trim(), competition: "Partido", roster: structuredClone(team),
-    lineup: [...lineup], serving, activeLiberoId };
+    lineup: [...lineup], serving, activeLiberoId,
+    setStarts: [{ set: 1, lineup: [...lineup], activeLiberoId, serving }] };
 }
 export function transition(previous, command) {
   const state = structuredClone(previous);
@@ -85,9 +87,27 @@ export function transition(previous, command) {
     state.status = "between";
   } else if (command.type === "next") {
     if (state.set >= 5) return previous;
+    const fallbackStart = previous.setStarts?.find(start => start.set === previous.set);
+    const nextLineup = command.lineup || fallbackStart?.lineup || previous.lineup;
+    const nextLiberoId = command.activeLiberoId === undefined
+      ? (fallbackStart ? fallbackStart.activeLiberoId : (previous.activeLiberoId ?? null))
+      : command.activeLiberoId;
+    if (!Array.isArray(nextLineup) || nextLineup.length !== 6 || new Set(nextLineup).size !== 6 ||
+        !nextLineup.every(id => state.roster.some(p => p.id === id && p.role !== "Líbero")) ||
+        (nextLiberoId !== null && !state.roster.some(p => p.id === nextLiberoId && p.role === "Líbero")) ||
+        typeof command.serving !== "boolean") return previous;
     state.set++;
     state.score = [0, 0];
+    state.rotation = 1;
+    state.lineup = [...nextLineup];
     state.serving = command.serving;
+    state.activeLiberoId = nextLiberoId;
+    state.setStarts = [...(state.setStarts || []), {
+      set: state.set,
+      lineup: [...nextLineup],
+      activeLiberoId: nextLiberoId,
+      serving: command.serving,
+    }];
     state.status = "playing";
   } else return previous;
   state.undo.push(snapshot);

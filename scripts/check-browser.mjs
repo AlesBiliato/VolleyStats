@@ -343,7 +343,9 @@ try{
   await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('confirm-sub:4,6');equal((await state()).lineup,[6,9,12,7,8,15]);await undo();equal(await state(),before);
  });
  await check('Cierre, bloqueo, siguiente set y deshacer',async()=>{
-  await reset();await tap('ours');await tap('finish');await commit('confirm-finish');const closed=await state();equal(closed.status,'between');assert(await page.locator('[data-cmd="ours"]').isDisabled());assert(await page.locator('[data-cmd="unforced-error"]').isDisabled());await tap('next');await commit('start:theirs');equal((await state()).set,2);equal((await state()).score,[0,0]);await undo();equal(await state(),closed);await undo();equal((await state()).status,'playing');
+  await reset();await tap('ours');await tap('finish');await commit('confirm-finish');const closed=await state();equal(closed.status,'between');assert(await page.locator('[data-cmd="ours"]').isDisabled());assert(await page.locator('[data-cmd="unforced-error"]').isDisabled());
+  await tap('next');assert.match(await page.locator('main').innerText(),/Preparar Set 2/);await tap('continue-lineup');await tap('continue-libero');await tap('set-serving:theirs');await tap('start-match');
+  equal((await state()).set,2);equal((await state()).score,[0,0]);await undo();equal(await state(),closed);await undo();equal((await state()).status,'playing');
  });
  await check('Estadisticas, plantilla e historial',async()=>{
   await reset();await tap('stats');equal(await page.locator('.stats-tabs .primary').innerText(),'General');equal(await page.locator('.stats-tabs button').allTextContents(),['General','K1/K2','Rotaciones','Errores']);await tap('stat-tab:K1/K2');equal(await page.locator('.phase-card').count(),2);assert.match(await page.locator('.phase-card').nth(0).innerText(),/Recepción/);assert.match(await page.locator('.phase-card').nth(1).innerText(),/Saque/);assert.equal(await page.locator('.phase-dashboard table').count(),0);assert.match(await page.locator('.phase-summary').innerText(),/Total de fases/);for(const tab of ['General','Rotaciones','Errores'])await tap('stat-tab:'+tab);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/Sustituciones/);await tap('close');await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),10);
@@ -526,6 +528,7 @@ try{
    const players=[
     {id:1,name:'Libero',role:'Líbero'},
     {id:4,name:'Colocador',role:'Colocador'},
+    {id:6,name:'Relevo',role:'Receptor'},
     {id:7,name:'Receptor 1',role:'Receptor'},
     {id:8,name:'Receptor 2',role:'Receptor'},
     {id:9,name:'Opuesto',role:'Opuesto'},
@@ -593,6 +596,43 @@ try{
   assert.equal(created.time,'18:00');
   assert.equal(created.venue,'Local');
   equal(created.score,[0,0]);
+  assert.equal(created.setStarts[0].serving,true);
+
+  await tap('theirs');
+  await commit('ours');
+  await tap('sub');
+  await page.selectOption('[name="out"]','9');
+  await page.selectOption('[name="in"]','6');
+  await page.locator('#sub-form button').click();
+  await commit('confirm-sub:9,6');
+  const finalSetOneLineup=(await state()).lineup;
+  assert.notDeepEqual(finalSetOneLineup,[4,9,12,7,8,15]);
+  await tap('finish');
+  await commit('confirm-finish');
+  await tap('next');
+  assert.match(await page.locator('main').innerText(),/Preparar Set 2/);
+  assert.match(await page.locator('.lineup-progress').innerText(),/6\s*\/\s*6/);
+  const preparedSetTwo=await page.locator('.setup-lineup-player').evaluateAll((buttons)=>Object.fromEntries(buttons.map((button)=>[Number(button.dataset.setupZone),Number(button.querySelector('.jersey').textContent.trim())])));
+  equal(preparedSetTwo,{1:4,2:9,3:12,4:7,5:8,6:15});
+  assert.notDeepEqual(Object.values(preparedSetTwo),finalSetOneLineup);
+  await tap('set-zone:6');
+  await tap('choose-lineup-player:6,6');
+  await tap('continue-lineup');
+  assert.equal(await page.locator('[data-cmd="set-libero:1"].selected').count(),1);
+  await tap('continue-libero');
+  await tap('set-serving:theirs');
+  await tap('start-match');
+  const second=await state();
+  equal(second.lineup,[4,9,12,7,8,6]);
+  assert.equal(second.set,2);equal(second.score,[0,0]);assert.equal(second.rotation,1);
+  assert.equal(second.serving,false);assert.equal(second.activeLiberoId,1);
+  equal(second.setStarts[1],{set:2,lineup:[4,9,12,7,8,6],activeLiberoId:1,serving:false});
+  await tap('finish');
+  await commit('confirm-finish');
+  await tap('next');
+  assert.match(await page.locator('main').innerText(),/Preparar Set 3/);
+  const preparedSetThree=await page.locator('.setup-lineup-player').evaluateAll((buttons)=>Object.fromEntries(buttons.map((button)=>[Number(button.dataset.setupZone),Number(button.querySelector('.jersey').textContent.trim())])));
+  equal(preparedSetThree,{1:4,2:9,3:12,4:7,5:8,6:6});
  });
 
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));

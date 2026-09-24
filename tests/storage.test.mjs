@@ -21,11 +21,19 @@ test('Guardado y lectura conservan partido, historial y deshacer',()=>{
 test('Persiste y recarga un Ataque - sin perder su valoración',()=>{
  localStore();const state=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});saveMatch(state);assert.equal(loadMatch().events.at(-1).grade,'-');
 });
+test('Carga partidos antiguos sin saque en los inicios de set',()=>{
+ const old=transition(initial(),{type:'point',team:1,label:'Punto rival'});
+ delete old.setStarts[0].serving;for(const snapshot of old.undo)delete snapshot.setStarts[0].serving;
+ localStore(JSON.stringify(old));assert.deepEqual(loadMatch(),old);
+ const current=initial();localStore(JSON.stringify(current));assert.equal(loadMatch().setStarts[0].serving,false);
+});
 test('Rechaza datos dañados sin sobrescribirlos',()=>{
  const mutations=[
   s=>{s.lineup[0]=999;},s=>{s.lineup[0]=s.lineup[1];},s=>{s.roster[0]=null;},
   s=>{s.score=[-1,0];},s=>{s.score=[0];},s=>{s.set=6;},s=>{s.rotation=0;},
   s=>{s.serving='false';},s=>{s.status='invalid';},s=>{s.finishedSets=[null];},
+  s=>{s.setStarts[0].lineup[0]=999;},
+  s=>{s.setStarts[0].serving='true';},
   s=>{s.events=[null];},s=>{s.undo=[null];},
  ];
  for(const mutate of mutations){const state=initial();mutate(state);const encoded=JSON.stringify(state);const stored=localStore(encoded);assert.throws(loadMatch);assert.equal(stored(),encoded);}
