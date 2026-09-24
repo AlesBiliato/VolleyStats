@@ -41,12 +41,16 @@ async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
 try{
- await check('Primera entrada, multiples plantillas, alineacion, recarga y archivo',async()=>{
+ await check('Primera entrada, multiples plantillas y datos basicos del partido',async()=>{
   await page.goto(url);
   await page.evaluate(()=>localStorage.clear());
   await page.reload();
 
-  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+  assert.match(
+   await page.locator('main').innerText(),
+   /Configura tu equipo/,
+  );
+
   equal(await state(),null);
 
   for(let id=21;id<=26;id++){
@@ -57,12 +61,6 @@ try{
    await tap('save-roster-player');
   }
 
-  assert.match(await page.locator('main').innerText(),/6 jugadores/);
-  equal(
-   await page.evaluate(()=>localStorage.getItem('volleystats.rosters.v1')),
-   null,
-  );
-
   await tap('save-new-roster');
   await page.locator('[name="name"]').fill('Equipo test');
   await tap('confirm-save-new-roster');
@@ -72,68 +70,97 @@ try{
   );
 
   equal(rosters.length,1);
-  equal(rosters[0].name,'Equipo test');
-  equal(rosters[0].players.map(p=>p.id),[21,22,23,24,25,26]);
+
+  await tap('use-roster:'+rosters[0].id);
+
+  assert.equal(
+   await page.locator('[name^="zone"]').count(),
+   0,
+  );
+
+  assert.equal(
+   await page.locator('[name="serving"]').count(),
+   0,
+  );
+
+  await page.locator('[name="rival"]').fill('Rival real');
+
+  const pickedDate=await page.evaluate(()=>{
+   const now=new Date();
+   const year=now.getFullYear();
+   const month=String(now.getMonth()+1).padStart(2,'0');
+   const day=String(now.getDate()).padStart(2,'0');
+   return `${year}-${month}-${day}`;
+  });
+
+  equal(
+   await page.locator(
+    'input[type="date"],input[type="time"],select[name="venue"]',
+   ).count(),
+   0,
+  );
+
+  await tap('open-date-picker');
+  await tap('pick-date:'+pickedDate);
+
+  await tap('open-time-picker');
+  await tap('pick-hour:18');
+  await tap('pick-minute:30');
+  await tap('confirm-time');
+
+  await tap('set-venue:home');
+
+  await page.locator(
+   '#match-basics-form button[type="submit"]',
+  ).click();
+
+  const summary=await page.locator('main').innerText();
+
+  assert.match(summary,/Equipo test/);
+  assert.match(summary,/Rival real/);
+  assert.match(summary,new RegExp(pickedDate));
+  assert.match(summary,/18:30/);
+  assert.match(summary,/Local/);
+
+  equal(await state(),null);
+
+  equal(
+   await page.evaluate(
+    ()=>localStorage.getItem('volleystats.match.v1'),
+   ),
+   null,
+  );
+
+  await tap('edit-match-basics');
+
+  equal(
+   await page.locator('[name="rival"]').inputValue(),
+   'Rival real',
+  );
+
+  equal(
+   await page.locator('[name="date"]').inputValue(),
+   pickedDate,
+  );
+
+  equal(
+   await page.locator('[name="time"]').inputValue(),
+   '18:30',
+  );
+
+  equal(
+   await page.locator('[name="venue"]').inputValue(),
+   'home',
+  );
+
+  await page.reload();
 
   assert.match(
    await page.locator('main').innerText(),
    /Selecciona una plantilla/,
   );
 
-  await tap('use-roster:'+rosters[0].id);
-
-  await page.locator('[name="rival"]').fill('Rival real');
-
-  for(let zone=1;zone<=6;zone++)
-   await page.selectOption(
-    '[name="zone'+zone+'"]',
-    String(20+zone),
-   );
-
-  await page.selectOption('[name="serving"]','ours');
-
-  await page.selectOption('[name="zone6"]','21');
-  await page.locator('#match-setup button[type="submit"]').click();
-
   equal(await state(),null);
-  assert.match(await page.locator('#toast').innerText(),/distintos/);
-
-  await page.selectOption('[name="zone6"]','26');
-  await page.locator('#match-setup button[type="submit"]').click();
-
-  const created=await state();
-
-  equal(created.demo,false);
-  equal(created.lineup,[21,22,23,24,25,26]);
-  equal(created.serving,true);
-  equal(created.score,[0,0]);
-
-  await tap('player:21');
-  await tap('action:Ataque');
-  await tap('grade:-');
-  await page.reload();
-
-  equal((await state()).events[0].grade,'-');
-  equal((await state()).score,[0,0]);
-
-  await tap('new-match');
-  await page.locator('[name="rival"]').fill('Segundo rival');
-
-  for(let zone=1;zone<=6;zone++)
-   await page.selectOption(
-    '[name="zone'+zone+'"]',
-    String(20+zone),
-   );
-
-  await page.selectOption('[name="serving"]','theirs');
-  await page.locator('#match-setup button[type="submit"]').click();
-
-  equal((await state()).serving,false);
-
-  await tap('new-match');
-  await tap('resume-match:'+created.id);
-
-  equal((await state()).events.length,1);
 
   await page.evaluate(()=>localStorage.clear());
  });
@@ -434,23 +461,39 @@ try{
 
   await page.locator('[name="rival"]').fill('Nuevo rival');
 
-  const ids=await page
-   .locator('[name="zone1"] option')
-   .evaluateAll(options=>options.map(o=>o.value).filter(Boolean));
+  const pickedDate=await page.evaluate(()=>{
+   const now=new Date();
+   const year=now.getFullYear();
+   const month=String(now.getMonth()+1).padStart(2,'0');
+   const day=String(now.getDate()).padStart(2,'0');
+   return `${year}-${month}-${day}`;
+  });
 
-  for(let i=1;i<=6;i++)
-   await page.selectOption('[name="zone'+i+'"]',ids[i-1]);
+  await tap('open-date-picker');
+  await tap('pick-date:'+pickedDate);
 
-  await page.selectOption('[name="serving"]','ours');
-  await page.locator('#match-setup button[type="submit"]').click();
+  await tap('open-time-picker');
+  await tap('pick-hour:18');
+  await tap('pick-minute:30');
+  await tap('confirm-time');
 
-  equal((await state()).lineup[0],999);
+  await tap('set-venue:away');
+
+  await page.locator(
+   '#match-basics-form button[type="submit"]',
+  ).click();
 
   assert.match(
-   await page.locator('#toast').innerText(),
-   /no se puede leer/,
+   await page.locator('main').innerText(),
+   /Nuevo rival/,
+  );
+
+  equal(
+   (await state()).lineup[0],
+   999,
   );
  });
+
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));
  if(results.some(r=>!r.ok)||errors.length)process.exitCode=1;
 }finally{await context.setOffline(false);await browser.close();await new Promise(r=>server.close(r));}

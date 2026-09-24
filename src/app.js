@@ -11,6 +11,11 @@ let hasMatch = false;
 let savedRosters = [];
 let selectedRosterId = null;
 let creatingRoster = false;
+let matchDraft = null;
+let setupStep = "basics";
+let calendarCursor = null;
+let timePickerHour = "18";
+let timePickerMinute = "00";
 
 try {
   savedRosters = loadRosters();
@@ -197,6 +202,298 @@ function court() {
     )
     .join("")}</div></div></section>`;
 }
+function matchSetupContent() {
+  const selectedRoster =
+    savedRosters.find((roster) => roster.id === selectedRosterId) || null;
+
+  const rosterName = selectedRoster?.name || "Plantilla seleccionada";
+
+  if (setupStep === "summary" && matchDraft) {
+    return `
+      <section class="setup-section">
+        <h2>2. Resumen del partido</h2>
+
+        <div class="setup-summary">
+        <p><b>Plantilla:</b> ${esc(rosterName)}</p>
+        <p><b>Rival:</b> ${esc(matchDraft.rival)}</p>
+        <p><b>Fecha:</b> ${esc(matchDraft.date)}</p>
+        <p><b>Hora:</b> ${esc(matchDraft.time)}</p>
+        <p>
+          <b>Condici\u00f3n:</b>
+          ${matchDraft.venue === "home" ? "Local" : "Visitante"}
+        </p>
+      </div>
+
+      <div class="dialog-actions">
+        ${button("Modificar datos", "edit-match-basics")}
+      </div>
+
+        <p class="muted">
+          Siguiente paso: preparar el Set 1.
+        </p>
+      </section>
+    `;
+  }
+
+  const rival = matchDraft?.rival || "";
+  const date = matchDraft?.date || "";
+  const time = matchDraft?.time || "";
+  const venue = matchDraft?.venue || "";
+
+  return `
+    <section class="setup-section">
+      <h2>2. Datos del partido</h2>
+
+      <form id="match-basics-form">
+      <div class="setup-lineup">
+        <label class="setup-field">
+          <span class="setup-field-label">Equipo rival</span>
+          <input
+            class="setup-control"
+            name="rival"
+            maxlength="80"
+            required
+            placeholder="Nombre del rival"
+            value="${esc(rival)}"
+          />
+        </label>
+
+        <input
+          type="hidden"
+          name="date"
+          value="${esc(date)}"
+        />
+
+        <button
+          type="button"
+          class="setup-field setup-picker-trigger"
+          data-cmd="open-date-picker"
+        >
+          <span class="setup-field-label">Fecha</span>
+          <span
+            class="setup-picker-value ${date ? "" : "is-placeholder"}"
+            data-picker-value="date"
+          >
+            ${date ? esc(formatDateLabel(date)) : "Seleccionar fecha"}
+          </span>
+          <span class="setup-picker-icon" aria-hidden="true">&#9638;</span>
+        </button>
+
+        <input
+          type="hidden"
+          name="time"
+          value="${esc(time)}"
+        />
+
+        <button
+          type="button"
+          class="setup-field setup-picker-trigger"
+          data-cmd="open-time-picker"
+        >
+          <span class="setup-field-label">Hora</span>
+          <span
+            class="setup-picker-value ${time ? "" : "is-placeholder"}"
+            data-picker-value="time"
+          >
+            ${time ? esc(time) : "Seleccionar hora"}
+          </span>
+          <span class="setup-picker-icon" aria-hidden="true">&#9716;</span>
+        </button>
+
+        <div class="setup-field venue-field">
+          <span class="setup-field-label">Local / visitante</span>
+
+          <input
+            type="hidden"
+            name="venue"
+            value="${esc(venue)}"
+          />
+
+          <div class="venue-options">
+            <button
+              type="button"
+              class="venue-option ${venue === "home" ? "selected" : ""}"
+              data-cmd="set-venue:home"
+              data-venue="home"
+              aria-pressed="${venue === "home"}"
+            >
+              Local
+            </button>
+
+            <button
+              type="button"
+              class="venue-option ${venue === "away" ? "selected" : ""}"
+              data-cmd="set-venue:away"
+              data-venue="away"
+              aria-pressed="${venue === "away"}"
+            >
+              Visitante
+            </button>
+          </div>
+        </div>
+      </div>
+
+        <button class="primary full" type="submit">
+          Continuar
+        </button>
+      </form>
+    </section>
+  `;
+}
+
+function formatDateLabel(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day));
+}
+
+function dateValue(year, month, day) {
+  return [
+    year,
+    String(month + 1).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
+}
+
+function calendarPickerBody() {
+  const cursor = calendarCursor || new Date();
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+
+  const firstWeekday =
+    (new Date(year, month, 1).getDay() + 6) % 7;
+
+  const daysInMonth =
+    new Date(year, month + 1, 0).getDate();
+
+  const selected =
+    document.querySelector(
+      '#match-basics-form [name="date"]',
+    )?.value || "";
+
+  const now = new Date();
+
+  const today = dateValue(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+
+  const monthTitle =
+    new Intl.DateTimeFormat("es-ES", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date(year, month, 1));
+
+  const blanks =
+    Array.from(
+      { length: firstWeekday },
+      () => '<span class="calendar-empty"></span>',
+    ).join("");
+
+  const days =
+    Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const value = dateValue(year, month, day);
+
+      const classes = [
+        "calendar-day",
+        value === today ? "is-today" : "",
+        value === selected ? "selected" : "",
+      ].filter(Boolean).join(" ");
+
+      return `
+        <button
+          type="button"
+          class="${classes}"
+          data-cmd="pick-date:${value}"
+          aria-label="${value}"
+        >
+          ${day}
+        </button>
+      `;
+    }).join("");
+
+  return `
+    <div class="picker-shell">
+      <div class="calendar-head">
+        ${button("&#8249;", "calendar-prev", "picker-nav")}
+        <strong>${esc(monthTitle)}</strong>
+        ${button("&#8250;", "calendar-next", "picker-nav")}
+      </div>
+
+      <div class="calendar-weekdays">
+        <span>L</span>
+        <span>M</span>
+        <span>X</span>
+        <span>J</span>
+        <span>V</span>
+        <span>S</span>
+        <span>D</span>
+      </div>
+
+      <div class="calendar-grid">
+        ${blanks}
+        ${days}
+      </div>
+    </div>
+  `;
+}
+
+function timePickerBody() {
+  const hours =
+    Array.from({ length: 24 }, (_, index) => {
+      const value = String(index).padStart(2, "0");
+
+      return button(
+        value,
+        `pick-hour:${value}`,
+        `time-option ${value === timePickerHour ? "selected" : ""}`,
+      );
+    }).join("");
+
+  const minutes =
+    Array.from({ length: 12 }, (_, index) => {
+      const value = String(index * 5).padStart(2, "0");
+
+      return button(
+        value,
+        `pick-minute:${value}`,
+        `time-option ${value === timePickerMinute ? "selected" : ""}`,
+      );
+    }).join("");
+
+  return `
+    <div class="picker-shell time-picker">
+      <div class="time-preview">
+        ${timePickerHour}:${timePickerMinute}
+      </div>
+
+      <span class="picker-label">Hora</span>
+      <div class="time-grid time-hours">
+        ${hours}
+      </div>
+
+      <span class="picker-label">Minutos</span>
+      <div class="time-grid time-minutes">
+        ${minutes}
+      </div>
+
+      <div class="dialog-actions">
+        ${button("Cancelar", "close")}
+        ${button("Confirmar hora", "confirm-time", "primary")}
+      </div>
+    </div>
+  `;
+}
+
 function renderSetup() {
   if (creatingRoster) {
     app.innerHTML = `
@@ -323,16 +620,9 @@ function renderSetup() {
       ${button("Gestionar plantilla", "nav:roster")}
       ${button("A\u00f1adir jugador", "add-roster-player", "primary")}
     </div>
-    <h2>2. Preparar partido</h2>
-    ${eligible.length < 6 ? '<p>Añade al menos seis jugadores que no sean líberos para elegir la alineación.</p>' : `<form id="match-setup">
-      <label>Equipo rival<input name="rival" maxlength="80" required placeholder="Nombre del rival"></label>
-      <p>Selecciona un jugador distinto en cada zona. Zona 1: zaguero derecho; zonas 2, 3 y 4: delanteros; zonas 5 y 6: zagueros.</p>
-      <div class="setup-lineup">${Array.from({length:6}, (_, i) => `<label>Zona ${i + 1}<select name="zone${i + 1}" required><option value="">Seleccionar jugador</option>${eligible.map(p => `<option value="${p.id}">#${p.id} · ${esc(p.name)} · ${esc(p.role)}</option>`).join("")}</select></label>`).join("")}</div>
-      <label>Saque inicial<select name="serving" required><option value="">Elige quién saca</option><option value="ours">Sacamos nosotros</option><option value="theirs">Saca el rival</option></select></label>
-      ${hasMatch ? '<p>El partido actual se conservará en los partidos guardados de este dispositivo.</p>' : ""}
-      <button class="primary full" type="submit">Iniciar partido</button></form>`}
+    ${matchSetupContent()}
     ${hasMatch ? button("Volver al partido actual", "nav:match", "full") : ""}
-    ${archives.length ? `<h2>Partidos guardados</h2>${archives.filter(m => m.id !== state.id).map(m => button(`${esc(m.rival)} · ${esc(m.date)} · ${m.score.join("–")}`, "resume-match:" + m.id, "full")).join("")}` : ""}
+    ${archives.length ? `<h2>Partidos guardados</h2>${archives.filter(m => m.id !== state.id).map(m => button(`${esc(m.rival)} ? ${esc(m.date)} ? ${m.score.join("?")}`, "resume-match:" + m.id, "full")).join("")}` : ""}
     <p class="muted">Los datos se guardan en este navegador. No se sincronizan entre dispositivos.</p></section></main>`;
 }
 function activateMatch(next) {
@@ -368,29 +658,48 @@ function activateMatch(next) {
   render();
 }
 document.addEventListener("submit", e => {
-  if (e.target.id !== "match-setup") return;
+  if (e.target.id !== "match-basics-form") return;
+
   e.preventDefault();
+
   const data = new FormData(e.target);
-  try {
-    const serving = data.get("serving");
-    if (!["ours", "theirs"].includes(serving)) throw Error("Elige el saque inicial.");
-    const nextMatch = createMatch({
-      team: teamRoster,
-      rival: data.get("rival"),
-      lineup: Array.from(
-        { length: 6 },
-        (_, i) => Number(data.get("zone" + (i + 1))),
-      ),
-      serving: serving === "ours",
-    });
 
-    if (selectedRosterId) {
-      nextMatch.rosterId = selectedRosterId;
-    }
+  const rival = String(data.get("rival") || "").trim();
+  const date = String(data.get("date") || "");
+  const time = String(data.get("time") || "");
+  const venue = String(data.get("venue") || "");
 
-    activateMatch(nextMatch);
-  } catch (error) { toast(error.message); }
+  if (!rival) {
+    toast("Introduce el nombre del rival.");
+    return;
+  }
+
+  if (!date) {
+    toast("Selecciona la fecha del partido.");
+    return;
+  }
+
+  if (!time) {
+    toast("Selecciona la hora del partido.");
+    return;
+  }
+
+  if (!["home", "away"].includes(venue)) {
+    toast("Indica si jugamos como local o visitante.");
+    return;
+  }
+
+  matchDraft = {
+    rival,
+    date,
+    time,
+    venue,
+  };
+
+  setupStep = "summary";
+  render();
 });
+
 function renderRosterSelector() {
   app.innerHTML = `
     <header>
@@ -713,7 +1022,187 @@ document.addEventListener("click", (e) => {
   if (!target) return;
   e.preventDefault();
   const [cmd, value] = target.dataset.cmd.split(":");
-  if (cmd === "new-match") { page = "setup"; render(); return; }
+  if (cmd === "new-match") {
+    matchDraft = null;
+    setupStep = "basics";
+    page = "setup";
+    render();
+    return;
+  }
+  if (cmd === "open-date-picker") {
+    const current =
+      document.querySelector(
+        '#match-basics-form [name="date"]',
+      )?.value || "";
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(current)) {
+      const [year, month] = current.split("-").map(Number);
+      calendarCursor = new Date(year, month - 1, 1);
+    } else {
+      const now = new Date();
+      calendarCursor =
+        new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    show("Seleccionar fecha", calendarPickerBody());
+    return;
+  }
+
+  if (cmd === "calendar-prev") {
+    if (!calendarCursor) return;
+
+    calendarCursor = new Date(
+      calendarCursor.getFullYear(),
+      calendarCursor.getMonth() - 1,
+      1,
+    );
+
+    show("Seleccionar fecha", calendarPickerBody());
+    return;
+  }
+
+  if (cmd === "calendar-next") {
+    if (!calendarCursor) return;
+
+    calendarCursor = new Date(
+      calendarCursor.getFullYear(),
+      calendarCursor.getMonth() + 1,
+      1,
+    );
+
+    show("Seleccionar fecha", calendarPickerBody());
+    return;
+  }
+
+  if (cmd === "pick-date") {
+    const input =
+      document.querySelector(
+        '#match-basics-form [name="date"]',
+      );
+
+    const display =
+      document.querySelector(
+        '[data-picker-value="date"]',
+      );
+
+    if (!input || !value) return;
+
+    input.value = value;
+
+    if (display) {
+      display.textContent = formatDateLabel(value);
+      display.classList.remove("is-placeholder");
+    }
+
+    modal.close();
+    return;
+  }
+
+  if (cmd === "open-time-picker") {
+    const current =
+      document.querySelector(
+        '#match-basics-form [name="time"]',
+      )?.value || "";
+
+    if (/^\d{2}:\d{2}$/.test(current)) {
+      [timePickerHour, timePickerMinute] =
+        current.split(":");
+    } else {
+      const now = new Date();
+
+      timePickerHour =
+        String(now.getHours()).padStart(2, "0");
+
+      timePickerMinute =
+        String(
+          Math.min(
+            55,
+            Math.round(now.getMinutes() / 5) * 5,
+          ),
+        ).padStart(2, "0");
+    }
+
+    show("Seleccionar hora", timePickerBody());
+    return;
+  }
+
+  if (cmd === "pick-hour") {
+    timePickerHour = value;
+    show("Seleccionar hora", timePickerBody());
+    return;
+  }
+
+  if (cmd === "pick-minute") {
+    timePickerMinute = value;
+    show("Seleccionar hora", timePickerBody());
+    return;
+  }
+
+  if (cmd === "confirm-time") {
+    const input =
+      document.querySelector(
+        '#match-basics-form [name="time"]',
+      );
+
+    const display =
+      document.querySelector(
+        '[data-picker-value="time"]',
+      );
+
+    if (!input) return;
+
+    const nextTime =
+      `${timePickerHour}:${timePickerMinute}`;
+
+    input.value = nextTime;
+
+    if (display) {
+      display.textContent = nextTime;
+      display.classList.remove("is-placeholder");
+    }
+
+    modal.close();
+    return;
+  }
+
+  if (cmd === "set-venue") {
+    if (!["home", "away"].includes(value)) return;
+
+    const input =
+      document.querySelector(
+        '#match-basics-form [name="venue"]',
+      );
+
+    if (!input) return;
+
+    input.value = value;
+
+    document
+      .querySelectorAll("[data-venue]")
+      .forEach((option) => {
+        const selected =
+          option.dataset.venue === value;
+
+        option.classList.toggle(
+          "selected",
+          selected,
+        );
+
+        option.setAttribute(
+          "aria-pressed",
+          String(selected),
+        );
+      });
+
+    return;
+  }
+
+  if (cmd === "edit-match-basics") {
+    setupStep = "basics";
+    render();
+    return;
+  }
+
   if (cmd === "resume-match") {
     try { const saved = loadArchives().find(m => m.id === value); if (saved) activateMatch(saved); }
     catch (error) { toast(error.message); }
@@ -1019,6 +1508,8 @@ document.addEventListener("click", (e) => {
     selectedRosterId = roster.id;
     teamRoster = structuredClone(roster.players);
     creatingRoster = false;
+    matchDraft = null;
+    setupStep = "basics";
     page = "setup";
     render();
     return;

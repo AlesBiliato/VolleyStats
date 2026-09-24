@@ -39,6 +39,7 @@ button:active {
 }
 button:focus-visible,
 a:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: 3px solid #df9b43;
   outline-offset: 3px;
@@ -759,6 +760,7 @@ label {
   font-size: 11px;
   color: #718166;
 }
+input:not([type="checkbox"]):not([type="radio"]),
 select {
   font: inherit;
   font-size: 15px;
@@ -1875,8 +1877,317 @@ dialog.stats-dialog {
 .setup-card { width: 100%; max-width: 880px; margin: 0 auto; }
 .setup-card h2 { margin-top: 24px; }
 .setup-card p { line-height: 1.6; }
-.setup-lineup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 480px) { .setup-lineup { grid-template-columns: 1fr; } }
+
+.setup-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f7faf5;
+}
+
+.setup-section h2 {
+  margin: 0 0 6px;
+}
+
+.setup-section label {
+  margin: 12px 0 0;
+}
+
+/* Campo reutilizable de formularios */
+.setup-field {
+  display: block;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 12px 14px 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+
+.setup-field:hover {
+  border-color: #b5c7b5;
+  background: #fbfdf9;
+}
+
+.setup-field:focus-within {
+  border-color: var(--green);
+  background: #fff;
+  box-shadow: 0 0 0 3px #12645114;
+}
+
+.setup-field-label {
+  display: block;
+  color: #718166;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+}
+
+/* El borde pertenece a la tarjeta completa, no al control interior. */
+.setup-field .setup-control {
+  width: 100%;
+  min-height: 34px;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background-color: transparent;
+  color: #294233;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  cursor: inherit;
+  box-shadow: none;
+}
+
+.setup-field .setup-control:focus,
+.setup-field .setup-control:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+/* Selectores personalizados de VolleyStats */
+.setup-picker-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 67px;
+  padding-right: 44px;
+  text-align: left;
+}
+
+.setup-picker-value {
+  display: block;
+  margin-top: 8px;
+  color: #294233;
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.setup-picker-value.is-placeholder {
+  color: #8d9988;
+  font-weight: 500;
+}
+
+.setup-picker-icon {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  color: #718166;
+  font-size: 20px;
+  transform: translateY(-20%);
+  pointer-events: none;
+}
+
+.venue-field {
+  cursor: default;
+}
+
+.venue-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.venue-option {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.venue-option.selected {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.venue-option.selected:hover {
+  background: #0b5343;
+}
+
+/* Calendario propio */
+.picker-shell {
+  width: min(380px, 78vw);
+}
+
+.calendar-head {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 18px;
+}
+
+.calendar-head strong {
+  text-align: center;
+  color: #294233;
+  font-size: 15px;
+  text-transform: capitalize;
+}
+
+.picker-nav {
+  min-height: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 24px;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 6px;
+}
+
+.calendar-weekdays span {
+  text-align: center;
+  color: #8a9785;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.calendar-empty {
+  min-height: 40px;
+}
+
+.calendar-day {
+  min-width: 0;
+  min-height: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.calendar-day.is-today {
+  border-color: #8fb29d;
+  color: var(--green);
+}
+
+.calendar-day.selected {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.calendar-day.selected:hover {
+  background: #0b5343;
+}
+
+/* Selector propio de hora */
+.time-preview {
+  margin: 4px 0 20px;
+  color: var(--green);
+  font-size: 32px;
+  font-weight: 750;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.picker-label {
+  display: block;
+  margin: 15px 0 7px;
+  color: #718166;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.time-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.time-hours {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.time-minutes {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.time-option {
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 3px;
+  font-size: 12px;
+}
+
+.time-option.selected {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.time-option.selected:hover {
+  background: #0b5343;
+}
+
+.setup-section .full {
+  margin-top: 20px;
+}
+
+.setup-lineup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.setup-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.setup-summary p {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+}
+
+@media (max-width: 480px) {
+  .setup-lineup,
+  .setup-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-section {
+    padding: 16px;
+  }
+
+  .picker-shell {
+    width: min(330px, 78vw);
+  }
+
+  .time-hours,
+  .time-minutes {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .calendar-day {
+    min-height: 36px;
+    height: 36px;
+  }
+}
 
 /* Indicador visual de saque */
 #app .score {
