@@ -16,6 +16,7 @@ let setupStep = "basics";
 let calendarCursor = null;
 let timePickerHour = "18";
 let timePickerMinute = "00";
+let returnToSetupAfterRoster = false;
 
 try {
   savedRosters = loadRosters();
@@ -494,6 +495,21 @@ function timePickerBody() {
   `;
 }
 
+function captureMatchBasicsDraft() {
+  const form = document.querySelector("#match-basics-form");
+
+  if (!form) return;
+
+  const data = new FormData(form);
+
+  matchDraft = {
+    rival: String(data.get("rival") || ""),
+    date: String(data.get("date") || ""),
+    time: String(data.get("time") || ""),
+    venue: String(data.get("venue") || ""),
+  };
+}
+
 function renderSetup() {
   if (creatingRoster) {
     app.innerHTML = `
@@ -617,7 +633,7 @@ function renderSetup() {
     }
 
     <div class="dialog-actions">
-      ${button("Gestionar plantilla", "nav:roster")}
+      ${button("Gestionar plantilla", "manage-roster")}
       ${button("A\u00f1adir jugador", "add-roster-player", "primary")}
     </div>
     ${matchSetupContent()}
@@ -883,6 +899,18 @@ function render() {
                     )
                     .join("")}
                 </div>
+
+                ${
+                  returnToSetupAfterRoster
+                    ? `<div class="dialog-actions">
+                        ${button(
+                          "Confirmar plantilla",
+                          "confirm-roster",
+                          "primary",
+                        )}
+                      </div>`
+                    : ""
+                }
               </section>
             `
             : `
@@ -1023,6 +1051,7 @@ document.addEventListener("click", (e) => {
   e.preventDefault();
   const [cmd, value] = target.dataset.cmd.split(":");
   if (cmd === "new-match") {
+    returnToSetupAfterRoster = false;
     matchDraft = null;
     setupStep = "basics";
     page = "setup";
@@ -1508,6 +1537,7 @@ document.addEventListener("click", (e) => {
     selectedRosterId = roster.id;
     teamRoster = structuredClone(roster.players);
     creatingRoster = false;
+    returnToSetupAfterRoster = false;
     matchDraft = null;
     setupStep = "basics";
     page = "setup";
@@ -1524,7 +1554,28 @@ document.addEventListener("click", (e) => {
     return;
   }
 
+  if (cmd === "manage-roster") {
+    captureMatchBasicsDraft();
+    returnToSetupAfterRoster = true;
+    page = "roster";
+    render();
+    return;
+  }
+
+  if (cmd === "confirm-roster") {
+    if (!returnToSetupAfterRoster) return;
+
+    returnToSetupAfterRoster = false;
+    page = "setup";
+    render();
+    return;
+  }
+
   if (cmd === "nav") {
+    if (value !== "roster") {
+      returnToSetupAfterRoster = false;
+    }
+
     page = value;
     render();
     return;

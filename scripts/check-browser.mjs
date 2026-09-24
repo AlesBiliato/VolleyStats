@@ -73,6 +73,31 @@ try{
 
   await tap('use-roster:'+rosters[0].id);
 
+  await page.locator('[name="rival"]').fill(
+   'Rival temporal',
+  );
+
+  await tap('manage-roster');
+
+  assert.match(
+   await page.locator('main').innerText(),
+   /Nuestra plantilla/,
+  );
+
+  equal(
+   await page.locator(
+    '[data-cmd="confirm-roster"]',
+   ).count(),
+   1,
+  );
+
+  await tap('confirm-roster');
+
+  equal(
+   await page.locator('[name="rival"]').inputValue(),
+   'Rival temporal',
+  );
+
   assert.equal(
    await page.locator('[name^="zone"]').count(),
    0,
