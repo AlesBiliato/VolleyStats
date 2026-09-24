@@ -113,6 +113,8 @@ const esc = (s) =>
       ],
   );
 const player = (id) => state.roster.find((p) => p.id === id);
+const isActiveLibero = (id) =>
+  id === state.activeLiberoId && player(id)?.role === "Líbero";
 const button = (label, cmd, cls = "", disabled = false) =>
   `<button class="${cls}" data-cmd="${cmd}" ${disabled ? "disabled" : ""}>${label}</button>`;
 function toast(s) {
@@ -187,6 +189,14 @@ function score() {
   return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${state.status === "playing" ? "EN DIRECTO" : "SET FINALIZADO"} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors">${button("Errores nuestros NO forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div>${button(state.status === "playing" ? "Finalizar set →" : state.set < 5 ? "Preparar siguiente set →" : "Ver resumen del partido", state.status === "playing" ? "finish" : state.set < 5 ? "next" : "stats", "finish")}</aside>`;
 }
 function court() {
+  const activeLibero = state.activeLiberoId == null
+    ? null
+    : state.roster.find(
+        (p) => p.id === state.activeLiberoId && p.role === "Líbero",
+      ) || null;
+  const benchPlayers = state.roster.filter(
+    (p) => !state.lineup.includes(p.id) && p.id !== activeLibero?.id,
+  );
   return `<section class="court-panel"><div class="court-head"><div></div><div class="phase"><b>R${state.rotation}</b><span>${state.serving ? "K2" : "K1"}</span></div></div><div class="court-wrap"><div class="net-label">CAMPO RIVAL</div><div class="net"></div><div class="court"><div class="attack-line"></div>${[
     4, 3, 2, 5, 6, 1,
   ]
@@ -197,11 +207,10 @@ function court() {
     })
     .join(
       "",
-    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div><div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${state.roster.length - 6} disponibles</span></div><div class="bench-players">${state.roster
-    .filter((p) => !state.lineup.includes(p.id))
+    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div>${activeLibero ? `<div class="active-libero"><span class="eyebrow">LÍBERO ACTIVO</span><button type="button" class="active-libero-control ${selected === activeLibero.id ? "selected" : ""}" data-cmd="player:${activeLibero.id}" aria-label="Líbero activo, dorsal ${activeLibero.id}, ${esc(activeLibero.name)}" ${state.status !== "playing" ? "disabled" : ""}><span class="jersey">${activeLibero.id}</span><span class="active-libero-name">${esc(activeLibero.name)}</span><small>L</small></button></div>` : ""}<div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${benchPlayers.length} disponibles</span></div><div class="bench-players">${benchPlayers
     .map(
       (p) =>
-        `<span class="bench-player ${p.role === "Líbero" ? "libero" : ""}"><b>${p.id}</b><span>${esc(p.name)}${p.role === "Líbero" ? " · L" : ""}</span></span>`,
+        `<span class="bench-player ${p.role === "Líbero" ? "libero" : ""}" data-player-id="${p.id}"><b>${p.id}</b><span>${esc(p.name)}${p.role === "Líbero" ? " · L" : ""}</span></span>`,
     )
     .join("")}</div></div></section>`;
 }
@@ -1223,9 +1232,10 @@ function historyRows(all = false) {
 }
 function actionDialog() {
   const p = player(selected);
+  const activeLiberoSelected = isActiveLibero(selected);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p><div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "-", "=", "Blo"] : ["#", "+", "-", "="]).map((g) => button(`<b>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "-", "=", "Blo"] : ["#", "+", "-", "="]).map((g) => button(`<b>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
   );
 }
 function saveRosterPlayer(form, originalId = null) {
@@ -2222,7 +2232,7 @@ document.addEventListener("click", (e) => {
   }
   if (cmd === "player") {
     selected = Number(value);
-    action = null;
+    action = isActiveLibero(selected) ? "Recepción" : null;
     actionDialog();
     return;
   }

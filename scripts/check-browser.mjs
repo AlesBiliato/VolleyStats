@@ -332,6 +332,40 @@ try{
   equal((await state()).score,[2,2]);const saved=await state();await page.reload();equal(await state(),saved);
   await tap('history');assert.match(await page.locator('#modal').innerText(),/Falta de rotación/);assert.match(await page.locator('#modal').innerText(),/Toque de red/);await tap('close');
  });
+ await check('Libero activo seleccionable y banquillo sin duplicados',async()=>{
+  const withLibero=initial();withLibero.activeLiberoId=1;withLibero.setStarts[0].activeLiberoId=1;
+  withLibero.roster.push({id:17,name:'Segundo libero',role:'Líbero'});
+  await reset(withLibero);
+  const control=page.locator('.active-libero-control');
+  assert.equal(await control.count(),1,'se muestra el control del líbero activo');
+  assert.match(await control.innerText(),/1/);assert.match(await control.innerText(),/Nico/);assert.match(await control.innerText(),/L/);
+  assert.equal(await page.locator('.bench-player[data-player-id="1"]').count(),0,'el líbero activo no se duplica en el banquillo');
+  assert.equal(await page.locator('.bench-player[data-player-id="17"]').count(),1,'el segundo líbero permanece en el banquillo');
+  assert.equal(await page.locator('.bench-player[data-player-id="3"]').count(),1,'los suplentes permanecen en el banquillo');
+  assert.equal(await page.locator('.bench-player').count(),4,'el banquillo contiene el número real de disponibles');
+  assert.match(await page.locator('.bench-note').innerText(),/^4 disponibles$/);
+  await tap('player:1');
+  assert.deepEqual(await page.locator('.grade-options [data-cmd]').evaluateAll(buttons=>buttons.map(button=>button.dataset.cmd)),['grade:#','grade:+','grade:-','grade:=']);
+  assert.equal(await page.locator('.action-options').count(),0);
+  assert.doesNotMatch(await page.locator('#modal').innerText(),/Saque|Ataque|Bloqueo/);
+  await commit('grade:+');
+  let liberoEvent=(await state()).events.at(-1);
+  assert.equal(liberoEvent.player,1);assert.equal(liberoEvent.action,'Recepción');assert.equal(liberoEvent.grade,'+');
+  await tap('player:1');await commit('grade:#');
+  liberoEvent=(await state()).events.at(-1);
+  assert.equal(liberoEvent.player,1);assert.equal(liberoEvent.action,'Recepción');assert.equal(liberoEvent.grade,'#');
+  await tap('player:7');
+  assert.deepEqual(await page.locator('.action-options [data-cmd]').evaluateAll(buttons=>buttons.map(button=>button.dataset.cmd)),['action:Saque','action:Recepción','action:Ataque','action:Bloqueo']);
+  assert.equal(await page.locator('.grade-options').count(),0);await tap('close');
+
+  const withoutLibero=initial();withoutLibero.activeLiberoId=null;
+  await reset(withoutLibero);assert.equal(await page.locator('.active-libero').count(),0,'sin líbero activo no se deja un bloque vacío');
+  assert.equal(await page.locator('.bench-player[data-player-id="1"]').count(),1,'el líbero inactivo se muestra en el banquillo');
+
+  const between=initial();between.activeLiberoId=1;between.setStarts[0].activeLiberoId=1;between.status='between';
+  await reset(between);assert.equal(await page.locator('.active-libero-control').count(),1,'el líbero sigue visible entre sets');
+  assert.equal(await page.locator('.active-libero-control').isDisabled(),true);
+ });
  await check('Acciones por jugador y sus valoraciones',async()=>{
   const combos=[['Recepción','#',null],['Recepción','+',null],['Recepción','-',null],['Recepción','=',1],['Saque','#',0],['Saque','+',null],['Saque','-',1],['Saque','=',1],['Ataque','#',0],['Ataque','+',null],['Ataque','-',null],['Ataque','Blo',1],['Ataque','=',1],['Bloqueo','#',0],['Bloqueo','=',1]];
   for(const [action,grade,team] of combos){await reset();await tap('player:7');await tap('action:'+action);await tap('grade:'+grade);const s=await state();equal(s.score,team===null?[0,0]:team===0?[1,0]:[0,1]);equal(s.events.at(-1).player,7);await undo();equal((await state()).score,[0,0]);}

@@ -341,6 +341,63 @@ h1 > span {
 .court-caption > span:first-child {
   color: #617657;
 }
+.active-libero {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 8px 0 12px;
+  border-top: 1px solid #e8ece5;
+}
+.active-libero-control {
+  width: min(190px, 70%);
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-color: #d59a6d;
+  background: #fff8f1;
+  color: #6f3d1d;
+  text-align: left;
+}
+#app .active-libero-control .jersey {
+  width: 44px;
+  height: 44px;
+  border-color: #b65f22;
+  background: #d9782d;
+  color: #fff;
+  font-size: 21px;
+}
+.active-libero-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.active-libero-control small {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #b65f22;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.active-libero-control.selected {
+  border-color: var(--green);
+  background: #edf5ef;
+  box-shadow: 0 0 0 3px #cfe2d3;
+}
+.active-libero-control:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .bench {
   display: flex;
   gap: 23px;
