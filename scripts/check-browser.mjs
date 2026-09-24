@@ -519,6 +519,64 @@ try{
   );
  });
 
+ await check('Preparacion completa de Set 1, libero, saque y creacion diferida',async()=>{
+  await page.goto(url);
+  await page.evaluate(()=>{
+   localStorage.clear();
+   const players=[
+    {id:1,name:'Libero',role:'Líbero'},
+    {id:4,name:'Colocador',role:'Colocador'},
+    {id:7,name:'Receptor 1',role:'Receptor'},
+    {id:8,name:'Receptor 2',role:'Receptor'},
+    {id:9,name:'Opuesto',role:'Opuesto'},
+    {id:12,name:'Central 1',role:'Central'},
+    {id:15,name:'Central 2',role:'Central'},
+   ];
+   localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'setup-roster',name:'Setup',players}]));
+  });
+  await page.reload();
+  await tap('use-roster:setup-roster');
+  await page.locator('[name="rival"]').fill('Rival setup');
+  await page.locator('[name="date"]').evaluate((input)=>{input.value='2026-09-24'});
+  await page.locator('[name="time"]').evaluate((input)=>{input.value='18:00'});
+  await page.locator('[name="venue"]').evaluate((input)=>{input.value='home'});
+  await page.locator('#match-basics-form button[type="submit"]').click();
+  await tap('prepare-set-1');
+  assert.equal(await page.locator('.setup-lineup-player').count(),6);
+  assert.match(await page.locator('.lineup-progress').innerText(),/0\s*\/\s*6/);
+  for(const [zone,id] of [[1,4],[2,9],[3,12],[4,7],[5,8],[6,15]]){
+   await tap('set-zone:'+zone);
+   assert.equal(await page.locator('.lineup-player-option').filter({hasText:'Libero'}).count(),0);
+   assert.equal(await page.locator('[data-cmd="choose-lineup-player:'+zone+','+id+'"]').count(),1);
+   await tap('choose-lineup-player:'+zone+','+id);
+  }
+  assert.match(await page.locator('main').innerText(),/Sexteto inicial completo/);
+  equal(await state(),null);
+  await tap('continue-lineup');
+  assert.match(await page.locator('main').innerText(),/Elegir líbero/);
+  await tap('set-libero:1');
+  await tap('continue-libero');
+  assert.match(await page.locator('main').innerText(),/Sexteto titular/);
+  await tap('set-serving:theirs');
+  await tap('back-to-lineup');
+  assert.match(await page.locator('.lineup-progress').innerText(),/6\s*\/\s*6/);
+  await tap('continue-lineup');
+  await tap('set-libero:1');
+  await tap('continue-libero');
+  await tap('set-serving:ours');
+  await tap('start-match');
+  const created=await state();
+  equal(created.lineup,[4,9,12,7,8,15]);
+  assert.equal(created.serving,true);
+  assert.equal(created.activeLiberoId,1);
+  assert.equal(created.rosterId,'setup-roster');
+  assert.equal(created.rival,'Rival setup');
+  assert.equal(created.date,'2026-09-24');
+  assert.equal(created.time,'18:00');
+  assert.equal(created.venue,'Local');
+  equal(created.score,[0,0]);
+ });
+
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));
  if(results.some(r=>!r.ok)||errors.length)process.exitCode=1;
 }finally{await context.setOffline(false);await browser.close();await new Promise(r=>server.close(r));}

@@ -2210,3 +2210,217 @@ dialog.stats-dialog {
 #app .serve-indicator > span {
   text-align: center;
 }
+
+
+/* Preparar Set 1 - VolleyStats */
+.set-lineup-section {
+  overflow: hidden;
+}
+
+.set-lineup-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.set-lineup-heading h2 {
+  margin-top: 6px;
+}
+
+.set-lineup-heading p {
+  max-width: 560px;
+  margin-bottom: 0;
+}
+
+.lineup-progress {
+  flex-shrink: 0;
+  min-width: 58px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.setup-court-wrap {
+  width: min(650px, 100%);
+  margin: 24px auto 0;
+}
+
+.setup-court {
+  height: clamp(360px, 48vw, 500px) !important;
+  min-height: 360px;
+  flex: none !important;
+}
+
+.setup-lineup-player {
+  cursor: pointer;
+}
+
+.setup-lineup-player .zone {
+  top: 18px;
+}
+
+.setup-lineup-player.empty .jersey {
+  border: 2px dashed #9db095;
+  background: #ffffff99;
+  box-shadow: none;
+  color: #78906f;
+  font-size: 28px;
+  font-weight: 500;
+}
+
+.setup-lineup-player.empty .player-name {
+  color: #718166;
+  font-weight: 500;
+}
+
+.setup-lineup-player.filled .jersey {
+  border-color: #91aa89;
+}
+
+.setup-lineup-player:hover .jersey {
+  border-color: var(--green);
+  transform: translateY(-1px);
+}
+
+.setup-lineup-player .jersey {
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    background 0.15s;
+}
+
+.lineup-picker {
+  width: min(480px, 78vw);
+}
+
+.setup-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.setup-choice-grid .choice {
+  min-height: 58px;
+  text-align: left;
+}
+
+.setup-choice-grid .choice small {
+  display: block;
+  margin-top: 4px;
+  color: #829078;
+}
+
+.setup-choice-grid .choice.selected {
+  border-color: var(--green);
+  background: #edf5ef;
+  box-shadow: 0 0 0 2px #d7e8d8;
+}
+
+.lineup-picker > p {
+  margin: 5px 0 18px;
+  color: #718166;
+  font-size: 12px;
+}
+
+.lineup-player-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-height: min(420px, 58vh);
+  overflow: auto;
+}
+
+.lineup-player-option {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.lineup-player-option.selected {
+  border-color: var(--green);
+  background: #edf5ef;
+}
+
+.lineup-option-number {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f1e4;
+  color: #264e3b;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.lineup-player-option.selected
+.lineup-option-number {
+  background: var(--green);
+  color: #fff;
+}
+
+.lineup-option-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lineup-option-info b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #294233;
+  font-size: 12px;
+}
+
+.lineup-option-info small {
+  color: #829078;
+  font-size: 9px;
+}
+
+@media (max-width: 480px) {
+  .set-lineup-heading {
+    display: block;
+  }
+
+  .lineup-progress {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .setup-court {
+    height: 390px !important;
+    min-height: 390px;
+  }
+
+  .setup-lineup-player .jersey {
+    width: 58px;
+    height: 58px;
+    font-size: 25px;
+  }
+
+  .setup-lineup-player .zone {
+    top: 20px;
+    font-size: 9px;
+  }
+
+  .setup-lineup-player .player-name {
+    font-size: 9px;
+  }
+
+  .lineup-player-options {
+    grid-template-columns: 1fr;
+  }
+}

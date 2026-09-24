@@ -23,13 +23,14 @@ export const initial = () => ({
   score: [0, 0],
   rotation: 1,
   serving: false,
+  activeLiberoId: null,
   lineup: [4, 9, 12, 7, 8, 15],
   finishedSets: [],
   status: "playing",
   events: [],
   undo: [],
 });
-export function createMatch({ team, rival, lineup, serving }) {
+export function createMatch({ team, rival, lineup, serving, activeLiberoId = null }) {
   if (!Array.isArray(team) || team.length < 6 || new Set(team.map(p => p.id)).size !== team.length)
     throw Error("Añade al menos seis jugadores a tu plantilla.");
   if (!Array.isArray(lineup) || lineup.length !== 6 || new Set(lineup).size !== 6 ||
@@ -37,9 +38,11 @@ export function createMatch({ team, rival, lineup, serving }) {
     throw Error("Selecciona seis titulares distintos, uno por zona, sin incluir al líbero.");
   if (typeof rival !== "string" || !rival.trim() || typeof serving !== "boolean")
     throw Error("Indica el rival y quién saca primero.");
+  if (activeLiberoId !== null && !team.some(p => p.id === activeLiberoId && p.role === "Líbero"))
+    throw Error("El líbero activo no pertenece a la plantilla.");
   return { ...initial(), id: globalThis.crypto.randomUUID(), demo: false,
     rival: rival.trim(), competition: "Partido", roster: structuredClone(team),
-    lineup: [...lineup], serving };
+    lineup: [...lineup], serving, activeLiberoId };
 }
 export function transition(previous, command) {
   const state = structuredClone(previous);

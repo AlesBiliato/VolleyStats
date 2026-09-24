@@ -68,6 +68,8 @@ function validSnapshot(data) {
     data.rotation >= 1 &&
     data.rotation <= 6 &&
     typeof data.serving === "boolean" &&
+    (data.activeLiberoId === undefined || data.activeLiberoId === null ||
+      (Number.isInteger(data.activeLiberoId) && data.roster.some((p) => p.id === data.activeLiberoId && p.role === "Líbero"))) &&
     ["playing", "between"].includes(data.status) &&
     Array.isArray(data.finishedSets) &&
     data.finishedSets.every(

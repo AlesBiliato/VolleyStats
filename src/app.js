@@ -17,6 +17,7 @@ let calendarCursor = null;
 let timePickerHour = "18";
 let timePickerMinute = "00";
 let returnToSetupAfterRoster = false;
+let setLineupDraft = Array(6).fill(null);
 
 try {
   savedRosters = loadRosters();
@@ -203,11 +204,244 @@ function court() {
     )
     .join("")}</div></div></section>`;
 }
+function sanitizeSetLineupDraft() {
+  const eligibleIds = new Set(
+    teamRoster
+      .filter((player) => player.role !== "Líbero")
+      .map((player) => player.id),
+  );
+
+  const used = new Set();
+
+  setLineupDraft = setLineupDraft.map((playerId) => {
+    if (
+      playerId === null ||
+      !eligibleIds.has(playerId) ||
+      used.has(playerId)
+    ) {
+      return null;
+    }
+
+    used.add(playerId);
+    return playerId;
+  });
+}
+
+function setupPlayerById(playerId) {
+  return (
+    teamRoster.find(
+      (player) => player.id === playerId,
+    ) || null
+  );
+}
+
+function lineupPlayerPickerBody(zone) {
+  sanitizeSetLineupDraft();
+
+  const currentPlayerId =
+    setLineupDraft[zone - 1];
+
+  const usedByOtherZones = new Set(
+    setLineupDraft.filter(
+      (playerId, index) =>
+        playerId !== null &&
+        index !== zone - 1,
+    ),
+  );
+
+  const available = [...teamRoster]
+    .filter(
+      (player) =>
+        player.role !== "Líbero" &&
+        !usedByOtherZones.has(player.id),
+    )
+    .sort((a, b) => a.id - b.id);
+
+  return `
+    <div class="lineup-picker">
+      <p>
+        Elige el jugador que empieza el Set 1
+        en la zona ${zone}.
+      </p>
+
+      <div class="lineup-player-options">
+        ${available
+          .map(
+            (player) => `
+              <button
+                type="button"
+                class="lineup-player-option ${
+                  player.id === currentPlayerId
+                    ? "selected"
+                    : ""
+                }"
+                data-cmd="choose-lineup-player:${zone},${player.id}"
+              >
+                <span class="lineup-option-number">
+                  ${player.id}
+                </span>
+
+                <span class="lineup-option-info">
+                  <b>${esc(player.name)}</b>
+                  <small>${esc(player.role)}</small>
+                </span>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+
+      ${
+        currentPlayerId !== null
+          ? `<div class="dialog-actions">
+              ${button(
+                "Vaciar zona",
+                `clear-lineup-zone:${zone}`,
+              )}
+            </div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function setOneLineupContent() {
+  sanitizeSetLineupDraft();
+
+  const visualZones = [4, 3, 2, 5, 6, 1];
+
+  const completed = setLineupDraft.filter(
+    (playerId) => playerId !== null,
+  ).length;
+
+  return `
+    <section class="setup-section set-lineup-section">
+      <div class="set-lineup-heading">
+        <div>
+          <span class="eyebrow">ALINEACIÓN INICIAL</span>
+          <h2>3. Preparar Set 1</h2>
+
+          <p>
+            Toca una zona de la pista y elige el jugador
+            que comenzará en esa posición.
+          </p>
+        </div>
+
+        <span class="lineup-progress">
+          ${completed} / 6
+        </span>
+      </div>
+
+      <div class="setup-court-wrap">
+        <div class="net-label">
+          CAMPO RIVAL
+        </div>
+
+        <div class="net"></div>
+
+        <div class="court setup-court">
+          <div class="attack-line"></div>
+
+          ${visualZones
+            .map((zone, index) => {
+              const playerId =
+                setLineupDraft[zone - 1];
+
+              const player =
+                playerId !== null
+                  ? setupPlayerById(playerId)
+                  : null;
+
+              return `
+                <button
+                  type="button"
+                  class="player setup-lineup-player ${
+                    player ? "filled" : "empty"
+                  }"
+                  style="
+                    --col:${index % 3};
+                    --row:${Math.floor(index / 3)};
+                  "
+                  data-cmd="set-zone:${zone}"
+                  data-setup-zone="${zone}"
+                  aria-label="${
+                    player
+                      ? `Zona ${zone}, dorsal ${player.id}, ${esc(player.name)}`
+                      : `Zona ${zone}, sin jugador`
+                  }"
+                >
+                  <span class="zone">
+                    Zona ${zone}
+                  </span>
+
+                  <span class="jersey">
+                    ${player ? player.id : "+"}
+                  </span>
+
+                  <span class="player-name">
+                    ${
+                      player
+                        ? esc(player.name)
+                        : "Elegir jugador"
+                    }
+                  </span>
+                </button>
+              `;
+            })
+            .join("")}
+        </div>
+
+        <div class="court-caption">
+          <span>
+            ${
+              completed === 6
+                ? "Sexteto inicial completo"
+                : `Faltan ${6 - completed} ${
+                    6 - completed === 1
+                      ? "posición"
+                      : "posiciones"
+                  }`
+            }
+          </span>
+
+          <span>Zonas 1–6</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        ${button("Continuar", "continue-lineup", "primary", completed !== 6)}
+        ${button(
+          "Volver al resumen",
+          "back-to-match-summary",
+        )}
+      </div>
+    </section>
+  `;
+}
+
+function liberoSetupContent() {
+  const liberos = teamRoster.filter((player) => player.role === "Líbero");
+  const selected = matchDraft.activeLiberoId;
+  return `<section class="setup-section"><h2>Elegir líbero</h2><p>Selecciona el líbero activo o confirma que jugaremos sin líbero.</p><div class="setup-choice-grid">${liberos.map((p) => button(`<b>#${p.id}</b> ${esc(p.name)} <small>${esc(p.role)}</small>`, `set-libero:${p.id}`, selected === p.id ? "choice selected" : "choice")).join("")}${button("Sin líbero", "set-libero:none", selected === null ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Volver a preparar el sexteto", "back-to-lineup")}${button("Continuar", "continue-libero", "primary", selected === undefined)}</div></section>`;
+}
+
+function finalSetupContent() {
+  const names = setLineupDraft.map((id) => setupPlayerById(id));
+  const libero = matchDraft.activeLiberoId === null ? "Sin líbero" : `#${setupPlayerById(matchDraft.activeLiberoId)?.id} ${esc(setupPlayerById(matchDraft.activeLiberoId)?.name || "")}`;
+  return `<section class="setup-section setup-final"><h2>Confirmar titular y saque</h2><div class="setup-summary"><p><b>Sexteto titular:</b> ${names.map((p, i) => `Zona ${i + 1}: #${p.id} ${esc(p.name)}`).join(" · ")}</p><p><b>Líbero activo:</b> ${libero}</p></div><h3>¿Quién empieza sacando?</h3><div class="setup-choice-grid">${button("Nosotros", "set-serving:ours", matchDraft.serving === true ? "choice selected" : "choice")}${button("Rival", "set-serving:theirs", matchDraft.serving === false ? "choice selected" : "choice")}</div><div class="dialog-actions">${button("Modificar alineación", "back-to-lineup")}${button("Empezar partido", "start-match", "primary", typeof matchDraft.serving !== "boolean")}</div></section>`;
+}
+
 function matchSetupContent() {
   const selectedRoster =
     savedRosters.find((roster) => roster.id === selectedRosterId) || null;
 
   const rosterName = selectedRoster?.name || "Plantilla seleccionada";
+
+  if (setupStep === "lineup" && matchDraft) {
+    return setOneLineupContent();
+  }
+  if (setupStep === "libero" && matchDraft) return liberoSetupContent();
+  if (setupStep === "confirm" && matchDraft) return finalSetupContent();
 
   if (setupStep === "summary" && matchDraft) {
     return `
@@ -227,6 +461,14 @@ function matchSetupContent() {
 
       <div class="dialog-actions">
         ${button("Modificar datos", "edit-match-basics")}
+        ${button(
+          "Preparar Set 1",
+          "prepare-set-1",
+          "primary",
+          teamRoster.filter(
+            (player) => player.role !== "Líbero",
+          ).length < 6,
+        )}
       </div>
 
         <p class="muted">
@@ -503,6 +745,7 @@ function captureMatchBasicsDraft() {
   const data = new FormData(form);
 
   matchDraft = {
+    ...matchDraft,
     rival: String(data.get("rival") || ""),
     date: String(data.get("date") || ""),
     time: String(data.get("time") || ""),
@@ -706,6 +949,7 @@ document.addEventListener("submit", e => {
   }
 
   matchDraft = {
+    ...matchDraft,
     rival,
     date,
     time,
@@ -1053,6 +1297,7 @@ document.addEventListener("click", (e) => {
   if (cmd === "new-match") {
     returnToSetupAfterRoster = false;
     matchDraft = null;
+    setLineupDraft = Array(6).fill(null);
     setupStep = "basics";
     page = "setup";
     render();
@@ -1223,6 +1468,171 @@ document.addEventListener("click", (e) => {
         );
       });
 
+    return;
+  }
+
+  if (cmd === "prepare-set-1") {
+    const eligible = teamRoster.filter(
+      (player) => player.role !== "Líbero",
+    );
+
+    if (eligible.length < 6) {
+      toast(
+        "Necesitas al menos seis jugadores que no sean l?beros.",
+      );
+      return;
+    }
+
+    sanitizeSetLineupDraft();
+    setupStep = "lineup";
+    render();
+    return;
+  }
+
+  if (cmd === "continue-lineup") {
+    sanitizeSetLineupDraft();
+    if (setLineupDraft.some((id) => id === null)) return;
+    matchDraft.activeLiberoId = undefined;
+    matchDraft.serving = undefined;
+    setupStep = "libero";
+    if (!teamRoster.some((player) => player.role === "Líbero")) matchDraft.activeLiberoId = null;
+    render();
+    return;
+  }
+
+  if (cmd === "back-to-lineup") {
+    setupStep = "lineup";
+    render();
+    return;
+  }
+
+  if (cmd === "set-libero") {
+    if (value === "none") matchDraft.activeLiberoId = null;
+    else {
+      const id = Number(value);
+      if (!teamRoster.some((player) => player.id === id && player.role === "Líbero")) return;
+      matchDraft.activeLiberoId = id;
+    }
+    render();
+    return;
+  }
+
+  if (cmd === "continue-libero") {
+    if (matchDraft.activeLiberoId === undefined) return;
+    setupStep = "confirm";
+    render();
+    return;
+  }
+
+  if (cmd === "set-serving") {
+    matchDraft.serving = value === "ours";
+    render();
+    return;
+  }
+
+  if (cmd === "start-match") {
+    if (setLineupDraft.some((id) => id === null) || typeof matchDraft.serving !== "boolean" || matchDraft.activeLiberoId === undefined) return;
+    let next;
+    try {
+      next = createMatch({ team: teamRoster, rival: matchDraft.rival, lineup: setLineupDraft, serving: matchDraft.serving, activeLiberoId: matchDraft.activeLiberoId });
+    } catch (error) { toast(error.message); return; }
+    next.date = matchDraft.date;
+    next.time = matchDraft.time;
+    next.venue = matchDraft.venue === "home" ? "Local" : "Visitante";
+    next.rosterId = selectedRosterId;
+    activateMatch(next);
+    return;
+  }
+
+  if (cmd === "back-to-match-summary") {
+    setupStep = "summary";
+    render();
+    return;
+  }
+
+  if (cmd === "set-zone") {
+    const zone = Number(value);
+
+    if (
+      !Number.isInteger(zone) ||
+      zone < 1 ||
+      zone > 6
+    ) {
+      return;
+    }
+
+    show(
+      `Zona ${zone}`,
+      lineupPlayerPickerBody(zone),
+    );
+
+    return;
+  }
+
+  if (cmd === "choose-lineup-player") {
+    const parts =
+      String(value || "").split(",");
+
+    const zone = Number(parts[0]);
+    const playerId = Number(parts[1]);
+
+    if (
+      !Number.isInteger(zone) ||
+      zone < 1 ||
+      zone > 6
+    ) {
+      return;
+    }
+
+    const player = teamRoster.find(
+      (item) =>
+        item.id === playerId &&
+        item.role !== "Líbero",
+    );
+
+    if (!player) {
+      toast(
+        "El jugador seleccionado no est? disponible.",
+      );
+      return;
+    }
+
+    const duplicated =
+      setLineupDraft.some(
+        (selectedId, index) =>
+          selectedId === playerId &&
+          index !== zone - 1,
+      );
+
+    if (duplicated) {
+      toast(
+        "Ese jugador ya est? colocado en otra zona.",
+      );
+      return;
+    }
+
+    setLineupDraft[zone - 1] = playerId;
+
+    modal.close();
+    render();
+    return;
+  }
+
+  if (cmd === "clear-lineup-zone") {
+    const zone = Number(value);
+
+    if (
+      !Number.isInteger(zone) ||
+      zone < 1 ||
+      zone > 6
+    ) {
+      return;
+    }
+
+    setLineupDraft[zone - 1] = null;
+
+    modal.close();
+    render();
     return;
   }
 
@@ -1539,6 +1949,7 @@ document.addEventListener("click", (e) => {
     creatingRoster = false;
     returnToSetupAfterRoster = false;
     matchDraft = null;
+    setLineupDraft = Array(6).fill(null);
     setupStep = "basics";
     page = "setup";
     render();
@@ -1566,6 +1977,7 @@ document.addEventListener("click", (e) => {
     if (!returnToSetupAfterRoster) return;
 
     returnToSetupAfterRoster = false;
+    sanitizeSetLineupDraft();
     page = "setup";
     render();
     return;
