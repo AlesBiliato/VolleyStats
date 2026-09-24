@@ -462,6 +462,19 @@ try{
   await reset();await tap('ours');const before=await state();await tap('history');await tap('edit-event:0');await tap('delete-event:0');await tap('confirm-correction');equal((await state()).events.length,0);assert.equal(await page.locator('[data-cmd="undo"]').isDisabled(),false);await page.reload();await undo();equal(await state(),before);
   await tap('history');await tap('edit-event:0');await page.selectOption('[name="kind"]','net');await page.locator('#edit-form button').click();await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('Full')}});await tap('confirm-correction');equal(await state(),before);assert.match(await page.locator('.dialog-toast.show').innerText(),/No se pudo guardar/);
  });
+ await check('Etiquetas de zona fuera del dorsal en tablet y desktop',async()=>{
+  const assertZoneLayout=async(courtSelector)=>{
+   const players=page.locator(`${courtSelector} .player[data-zone]`);assert.equal(await players.count(),6);
+   assert.deepEqual(await players.evaluateAll(items=>items.map(item=>item.dataset.zone)),['4','3','2','5','6','1']);
+   assert.deepEqual((await players.locator('.zone').allTextContents()).map(text=>Number(text.match(/\d+/)?.[0])).sort((a,b)=>a-b),[1,2,3,4,5,6]);
+   const geometry=await players.evaluateAll((items,selector)=>{const court=document.querySelector(selector).getBoundingClientRect();return items.map(item=>{const zone=item.querySelector('.zone').getBoundingClientRect(),jersey=item.querySelector('.jersey').getBoundingClientRect();const overlapX=Math.min(zone.right,jersey.right)-Math.max(zone.left,jersey.left),overlapY=Math.min(zone.bottom,jersey.bottom)-Math.max(zone.top,jersey.top);return {id:item.dataset.zone,overlaps:overlapX>0.5&&overlapY>0.5,gap:zone.left>=jersey.right?zone.left-jersey.right:jersey.left>=zone.right?jersey.left-zone.right:0,inside:zone.left>=court.left-0.5&&zone.right<=court.right+0.5&&zone.top>=court.top-0.5&&zone.bottom<=court.bottom+0.5,visible:zone.width>0&&zone.height>0};});},courtSelector);
+   for(const item of geometry){assert.equal(item.overlaps,false,`zona ${item.id} fuera del dorsal`);assert(item.gap>=4,`zona ${item.id} separada del dorsal`);assert.equal(item.inside,true,`zona ${item.id} dentro de la cancha`);assert.equal(item.visible,true,`zona ${item.id} visible`);}
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  };
+  await reset();
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');}
+  const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await page.setViewportSize({width:768,height:1024});await tap('next');await page.locator('.setup-court').waitFor();await assertZoneLayout('.setup-court');
+ });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);
   for(const [width,height] of [[1024,600],[1280,800],[1024,768],[1180,720],[800,1280],[768,1024],[600,960],[1366,640]]){

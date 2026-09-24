@@ -224,7 +224,7 @@ function court() {
     .map((zone, i) => {
       const p = player(state.lineup[zone - 1]);
 
-      return `<button class="player ${p.role === "Líbero" ? "libero" : ""} ${selected === p.id ? "selected" : ""}" style="--col:${i % 3};--row:${Math.floor(i / 3)}" data-cmd="player:${p.id}" aria-label="Dorsal ${p.id}, ${esc(p.name)}, zona ${zone}" ${state.status !== "playing" ? "disabled" : ""}><span class="zone">${zone}</span><span class="jersey">${p.id}</span><span class="player-name">${esc(p.name)} <small>${p.role === "Colocador" ? "C" : ""}</small></span></button>`;
+      return `<button class="player ${p.role === "Líbero" ? "libero" : ""} ${selected === p.id ? "selected" : ""}" style="--col:${i % 3};--row:${Math.floor(i / 3)}" data-cmd="player:${p.id}" data-zone="${zone}" aria-label="Dorsal ${p.id}, ${esc(p.name)}, zona ${zone}" ${state.status !== "playing" ? "disabled" : ""}><span class="player-marker"><span class="jersey">${p.id}</span><span class="zone">${zone}</span></span><span class="player-name">${esc(p.name)} <small>${p.role === "Colocador" ? "C" : ""}</small></span></button>`;
     })
     .join(
       "",
@@ -412,6 +412,7 @@ function setLineupContent(setNumber = preparingSetNumber) {
                     --row:${Math.floor(index / 3)};
                   "
                   data-cmd="set-zone:${zone}"
+                  data-zone="${zone}"
                   data-setup-zone="${zone}"
                   aria-label="${
                     player
@@ -419,12 +420,14 @@ function setLineupContent(setNumber = preparingSetNumber) {
                       : `Zona ${zone}, sin jugador`
                   }"
                 >
-                  <span class="zone">
-                    Zona ${zone}
-                  </span>
+                  <span class="player-marker">
+                    <span class="jersey">
+                      ${player ? player.id : "+"}
+                    </span>
 
-                  <span class="jersey">
-                    ${player ? player.id : "+"}
+                    <span class="zone">
+                      Zona ${zone}
+                    </span>
                   </span>
 
                   <span class="player-name">
