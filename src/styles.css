@@ -597,6 +597,21 @@ footer b {
   gap: 12px;
   margin-top: 22px;
 }
+
+/* Selector de plantillas guardadas */
+.saved-rosters-grid {
+  grid-template-columns: 1fr;
+}
+
+.saved-rosters-grid article {
+  width: 100%;
+}
+
+.saved-rosters-grid article > .dialog-actions {
+  margin-top: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .roster-grid article {
   display: flex;
   align-items: center;
@@ -605,6 +620,15 @@ footer b {
   padding: 15px;
   border-radius: 10px;
 }
+.roster-grid article.libero-player {
+  background: #fff8dc;
+  border-color: #e4c96f;
+}
+
+.roster-grid article.libero-player > b {
+  background: #f4dda0;
+}
+
 .roster-grid article > b {
   background: #e9f1e4;
   width: 45px;

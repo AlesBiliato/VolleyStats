@@ -244,7 +244,7 @@ function renderSetup() {
                     .sort((a, b) => a.id - b.id)
                     .map(
                       (p) => `
-                        <article>
+                        <article class="${p.role === "Líbero" ? "libero-player" : ""}">
                           <b>${p.id}</b>
 
                           <div>
@@ -305,7 +305,7 @@ function renderSetup() {
               .sort((a, b) => a.id - b.id)
               .map(
                 (p) => `
-                  <article>
+                  <article class="${p.role === "Líbero" ? "libero-player" : ""}">
                     <b>${p.id}</b>
                     <div>
                       <h3>${esc(p.name)}</h3>
@@ -422,7 +422,7 @@ function renderRosterSelector() {
             : ""
         }
 
-        <div class="roster-grid">
+        <div class="roster-grid saved-rosters-grid">
           ${[...savedRosters]
             .sort((a, b) => a.name.localeCompare(b.name, "es"))
             .map(
@@ -559,7 +559,7 @@ function render() {
                     .sort((a, b) => a.id - b.id)
                     .map(
                       (p) => `
-                        <article>
+                        <article class="${p.role === "Líbero" ? "libero-player" : ""}">
                           <b>${p.id}</b>
 
                           <div>
