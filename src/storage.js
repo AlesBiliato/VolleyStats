@@ -2,6 +2,7 @@
 
 const MATCH_KEY = "volleystats.match.v1";
 const ROSTER_KEY = "volleystats.roster.v1";
+const ROSTERS_KEY = "volleystats.rosters.v1";
 const LEGACY_MATCH_KEY = "volleytrack.match.v1";
 const LEGACY_ROSTER_KEY = "volleytrack.roster.v1";
 
@@ -25,6 +26,25 @@ function validRoster(data) {
     return false;
 
   const ids = new Set(data.map((p) => p.id));
+
+  return ids.size === data.length;
+}
+
+function validSavedRoster(data) {
+  return (
+    data &&
+    typeof data.id === "string" &&
+    data.id.trim().length > 0 &&
+    typeof data.name === "string" &&
+    data.name.trim().length > 0 &&
+    validRoster(data.players)
+  );
+}
+
+function validRosters(data) {
+  if (!Array.isArray(data) || !data.every(validSavedRoster)) return false;
+
+  const ids = new Set(data.map((roster) => roster.id));
 
   return ids.size === data.length;
 }
@@ -131,6 +151,46 @@ export function replaceMatch(next) {
     localStorage.setItem("volleystats.archives.v1", JSON.stringify(archives));
   }
   saveMatch(next);
+}
+
+export function loadRosters() {
+  const value = localStorage.getItem(ROSTERS_KEY);
+
+  if (value) {
+    const data = JSON.parse(value);
+
+    if (!validRosters(data))
+      throw Error("Formato de plantillas no compatible");
+
+    return data;
+  }
+
+  const legacyRoster = loadRoster();
+
+  if (!legacyRoster) return [];
+
+  const migrated = [
+    {
+      id: "imported-roster-v1",
+      name: "Plantilla importada",
+      players: structuredClone(legacyRoster),
+    },
+  ];
+
+  try {
+    localStorage.setItem(ROSTERS_KEY, JSON.stringify(migrated));
+  } catch {
+    // La plantilla antigua sigue disponible aunque la migracion no se pueda guardar.
+  }
+
+  return migrated;
+}
+
+export function saveRosters(rosters) {
+  if (!validRosters(rosters))
+    throw Error("Coleccion de plantillas no valida");
+
+  localStorage.setItem(ROSTERS_KEY, JSON.stringify(rosters));
 }
 
 export function loadRoster() {

@@ -2,25 +2,85 @@ import { correctEvent, grades } from "./corrections.js";
 import { statistics, percent } from "./statistics.js";
 
 import { initial, transition, createMatch } from "./domain.js";
-import { loadMatch, saveMatch, loadRoster, saveRoster, loadArchives, replaceMatch } from "./storage.js";
+import { loadMatch, saveMatch, loadRoster, saveRoster, loadRosters, saveRosters, loadArchives, replaceMatch } from "./storage.js";
 let teamRoster;
 let state;
 let storageError = false;
 let storageBlocked = false;
 let hasMatch = false;
+let savedRosters = [];
+let selectedRosterId = null;
+let creatingRoster = false;
 
 try {
-  teamRoster = loadRoster() || [];
+  savedRosters = loadRosters();
+  teamRoster = [];
+  creatingRoster = savedRosters.length === 0;
 } catch {
   storageError = true;
+  savedRosters = [];
   teamRoster = [];
+  creatingRoster = true;
 }
 
 try {
   const saved = loadMatch();
   hasMatch = Boolean(saved);
   state = saved || initial();
-  if (!teamRoster.length && saved && !saved.demo) teamRoster = structuredClone(saved.roster);
+
+  if (saved && !saved.demo) {
+    let matchingRoster = null;
+
+    if (typeof saved.rosterId === "string" && saved.rosterId) {
+      matchingRoster =
+        savedRosters.find(
+          (roster) => roster.id === saved.rosterId,
+        ) || null;
+    } else {
+      matchingRoster =
+        savedRosters.find((roster) => {
+          if (roster.players.length !== saved.roster.length) {
+            return false;
+          }
+
+          return roster.players.every((player) => {
+            const savedPlayer = saved.roster.find(
+              (item) => item.id === player.id,
+            );
+
+            return (
+              savedPlayer &&
+              savedPlayer.name === player.name &&
+              savedPlayer.role === player.role
+            );
+          });
+        }) || null;
+
+      if (matchingRoster) {
+        const migratedState = {
+          ...saved,
+          rosterId: matchingRoster.id,
+        };
+
+        state = migratedState;
+
+        try {
+          saveMatch(migratedState);
+        } catch {
+          storageError = true;
+        }
+      }
+    }
+
+    if (matchingRoster) {
+      selectedRosterId = matchingRoster.id;
+      teamRoster = structuredClone(matchingRoster.players);
+      creatingRoster = false;
+    } else if (!teamRoster.length) {
+      teamRoster = structuredClone(saved.roster);
+      creatingRoster = false;
+    }
+  }
 } catch {
   storageError = true;
   storageBlocked = true;
@@ -138,6 +198,96 @@ function court() {
     .join("")}</div></div></section>`;
 }
 function renderSetup() {
+  if (creatingRoster) {
+    app.innerHTML = `
+      <header>
+        <a class="brand" href="#">
+          <span class="brand-mark">V</span>Volley<span>Stats</span>
+        </a>
+
+        <div class="save-state">
+          <i></i>
+          ${storageError ? "Guardado no disponible" : "Plantilla sin guardar"}
+        </div>
+      </header>
+
+      <main>
+        <section class="wide-card setup-card roster-builder">
+          <div class="card-title">
+            <div>
+              <span class="eyebrow">NUEVA PLANTILLA</span>
+              <h1>Configura tu equipo</h1>
+              <p>
+                A\u00f1ade los jugadores que quieras incluir.
+                La plantilla no se guardar\u00e1 en el dispositivo hasta que pulses
+                <b>Guardar plantilla</b>.
+              </p>
+            </div>
+          </div>
+
+          <div class="card-title">
+            <div>
+              <h2>Jugadores</h2>
+              <span>
+                ${teamRoster.length}
+                ${teamRoster.length === 1 ? "jugador a\u00f1adido" : "jugadores a\u00f1adidos"}
+              </span>
+            </div>
+
+            ${button("+ A\u00f1adir jugador", "add-roster-player", "primary")}
+          </div>
+
+          ${
+            teamRoster.length
+              ? `<div class="roster-grid">
+                  ${[...teamRoster]
+                    .sort((a, b) => a.id - b.id)
+                    .map(
+                      (p) => `
+                        <article>
+                          <b>${p.id}</b>
+
+                          <div>
+                            <h3>${esc(p.name)}</h3>
+                            <p>${esc(p.role)}</p>
+                          </div>
+
+                          ${button("Editar", `edit-roster-player:${p.id}`)}
+                        </article>
+                      `,
+                    )
+                    .join("")}
+                </div>`
+              : `<p class="muted">
+                  Todav\u00eda no has a\u00f1adido ning\u00fan jugador.
+                </p>`
+          }
+
+          <div class="dialog-actions">
+            ${button(
+              "Guardar plantilla",
+              "save-new-roster",
+              "primary",
+              !teamRoster.length,
+            )}
+
+            ${
+              savedRosters.length
+                ? button("Volver a plantillas", "cancel-new-roster")
+                : ""
+            }
+          </div>
+
+          <p class="muted">
+            Los datos se guardar\u00e1n solamente en este dispositivo.
+          </p>
+        </section>
+      </main>
+    `;
+
+    return;
+  }
+
   const eligible = teamRoster.filter(p => p.role !== "Líbero");
   let archives = [];
   try { archives = loadArchives(); } catch { storageError = true; }
@@ -145,8 +295,34 @@ function renderSetup() {
     <main><section class="wide-card setup-card"><h1>${hasMatch ? "Preparar otro partido" : "Bienvenido a VolleyStats"}</h1>
     <p>Guarda tu plantilla en este dispositivo y elige la alineación inicial de cada partido.</p>
     ${storageError ? '<p role="alert">Hay un problema con el almacenamiento. No borres los datos del navegador.</p>' : ""}
-    <h2>1. Tu plantilla</h2><p>${teamRoster.length} jugadores guardados · ${eligible.length} disponibles para el sexteto inicial.</p>
-    <div class="dialog-actions">${button("Gestionar plantilla", "nav:roster")}${button("Añadir jugador", "add-roster-player", "primary")}</div>
+    <h2>1. Tu plantilla</h2>
+    <p>${teamRoster.length} ${teamRoster.length === 1 ? "jugador a\u00f1adido" : "jugadores a\u00f1adidos"}.</p>
+
+    ${
+      teamRoster.length
+        ? `<div class="roster-grid">
+            ${[...teamRoster]
+              .sort((a, b) => a.id - b.id)
+              .map(
+                (p) => `
+                  <article>
+                    <b>${p.id}</b>
+                    <div>
+                      <h3>${esc(p.name)}</h3>
+                      <p>${esc(p.role)}</p>
+                    </div>
+                  </article>
+                `,
+              )
+              .join("")}
+          </div>`
+        : `<p class="muted">Todav\u00eda no has a\u00f1adido ning\u00fan jugador.</p>`
+    }
+
+    <div class="dialog-actions">
+      ${button("Gestionar plantilla", "nav:roster")}
+      ${button("A\u00f1adir jugador", "add-roster-player", "primary")}
+    </div>
     <h2>2. Preparar partido</h2>
     ${eligible.length < 6 ? '<p>Añade al menos seis jugadores que no sean líberos para elegir la alineación.</p>' : `<form id="match-setup">
       <label>Equipo rival<input name="rival" maxlength="80" required placeholder="Nombre del rival"></label>
@@ -165,6 +341,23 @@ function activateMatch(next) {
     replaceMatch(next);
   } catch (error) { toast(error.message || "No se pudo guardar el partido."); return; }
   state = next;
+
+  const sourceRoster =
+    typeof next.rosterId === "string"
+      ? savedRosters.find(
+          (roster) => roster.id === next.rosterId,
+        ) || null
+      : null;
+
+  if (sourceRoster) {
+    selectedRosterId = sourceRoster.id;
+    teamRoster = structuredClone(sourceRoster.players);
+  } else {
+    selectedRosterId = null;
+    teamRoster = structuredClone(next.roster);
+  }
+
+  creatingRoster = false;
   hasMatch = true;
   page = "match";
   statsSet = "all";
@@ -181,11 +374,94 @@ document.addEventListener("submit", e => {
   try {
     const serving = data.get("serving");
     if (!["ours", "theirs"].includes(serving)) throw Error("Elige el saque inicial.");
-    activateMatch(createMatch({team: teamRoster, rival: data.get("rival"),
-      lineup: Array.from({length:6}, (_, i) => Number(data.get("zone" + (i + 1)))), serving: serving === "ours"}));
+    const nextMatch = createMatch({
+      team: teamRoster,
+      rival: data.get("rival"),
+      lineup: Array.from(
+        { length: 6 },
+        (_, i) => Number(data.get("zone" + (i + 1))),
+      ),
+      serving: serving === "ours",
+    });
+
+    if (selectedRosterId) {
+      nextMatch.rosterId = selectedRosterId;
+    }
+
+    activateMatch(nextMatch);
   } catch (error) { toast(error.message); }
 });
+function renderRosterSelector() {
+  app.innerHTML = `
+    <header>
+      <a class="brand" href="#">
+        <span class="brand-mark">V</span>Volley<span>Stats</span>
+      </a>
+
+      <div class="save-state">
+        <i></i>
+        ${storageError ? "Guardado no disponible" : "Guardado en este dispositivo"}
+      </div>
+    </header>
+
+    <main>
+      <section class="wide-card setup-card">
+        <div class="card-title">
+          <div>
+            <span class="eyebrow">VOLLEYSTATS</span>
+            <h1>Selecciona una plantilla</h1>
+            <p>Elige el equipo que vas a utilizar para preparar el partido.</p>
+          </div>
+
+          ${button("+ Nueva plantilla", "new-roster", "primary")}
+        </div>
+
+        ${
+          storageError
+            ? '<p role="alert">Hay un problema con el almacenamiento. No se sobrescribiran datos hasta resolverlo.</p>'
+            : ""
+        }
+
+        <div class="roster-grid">
+          ${[...savedRosters]
+            .sort((a, b) => a.name.localeCompare(b.name, "es"))
+            .map(
+              (roster) => `
+                <article>
+                  <div>
+                    <h3>${esc(roster.name)}</h3>
+                    <p>${roster.players.length} ${roster.players.length === 1 ? "jugador" : "jugadores"}</p>
+                  </div>
+
+                  <div class="dialog-actions">
+                    ${button("Usar plantilla", `use-roster:${roster.id}`, "primary")}
+                    ${button("Eliminar", `delete-roster:${roster.id}`)}
+                  </div>
+                </article>
+              `,
+            )
+            .join("")}
+        </div>
+
+        <p class="muted">
+          Las plantillas se guardan solamente en este dispositivo.
+        </p>
+      </section>
+    </main>
+  `;
+}
+
 function render() {
+  if (
+    !hasMatch &&
+    savedRosters.length &&
+    !selectedRosterId &&
+    !creatingRoster
+  ) {
+    renderRosterSelector();
+    return;
+  }
+
   if ((!hasMatch && page !== "roster") || page === "setup") {
     renderSetup();
     return;
@@ -353,10 +629,10 @@ function saveRosterPlayer(form, originalId = null) {
   const name = String(data.get("name")).trim();
   const role = String(data.get("role"));
 
-  const validRoles = ["Colocador", "Opuesto", "Receptor", "Central", "Líbero"];
+  const validRoles = ["Colocador", "Opuesto", "Receptor", "Central", "L\u00edbero"];
 
   if (!Number.isInteger(id) || id < 1 || id > 99) {
-    toast("Introduce un dorsal válido entre 1 y 99.");
+    toast("Introduce un dorsal v\u00e1lido entre 1 y 99.");
     return;
   }
 
@@ -366,19 +642,19 @@ function saveRosterPlayer(form, originalId = null) {
   }
 
   if (!validRoles.includes(role)) {
-    toast("Selecciona una posición válida.");
+    toast("Selecciona una posici\u00f3n v\u00e1lida.");
     return;
   }
 
   const isEditing = originalId !== null;
 
   if (isEditing && !teamRoster.some((p) => p.id === originalId)) {
-    toast("No se encontró el jugador que quieres editar.");
+    toast("No se encontr\u00f3 el jugador que quieres editar.");
     return;
   }
 
   if (teamRoster.some((p) => p.id === id && p.id !== originalId)) {
-    toast(`El dorsal ${id} ya está utilizado.`);
+    toast(`El dorsal ${id} ya est\u00e1 utilizado.`);
     return;
   }
 
@@ -389,8 +665,26 @@ function saveRosterPlayer(form, originalId = null) {
     : [...teamRoster, playerData];
 
   try {
-    saveRoster(nextRoster);
-    teamRoster = nextRoster;
+    if (creatingRoster) {
+      teamRoster = nextRoster;
+    } else if (selectedRosterId) {
+      if (!savedRosters.some((roster) => roster.id === selectedRosterId))
+        throw Error("La plantilla seleccionada ya no existe.");
+
+      const nextSavedRosters = savedRosters.map((roster) =>
+        roster.id === selectedRosterId
+          ? { ...roster, players: structuredClone(nextRoster) }
+          : roster,
+      );
+
+      saveRosters(nextSavedRosters);
+      savedRosters = nextSavedRosters;
+      teamRoster = nextRoster;
+    } else {
+      saveRoster(nextRoster);
+      teamRoster = nextRoster;
+    }
+
     storageError = false;
   } catch {
     storageError = true;
@@ -409,9 +703,10 @@ function saveRosterPlayer(form, originalId = null) {
   toast(
     isEditing
       ? `#${id} ${name} actualizado.`
-      : `#${id} ${name} añadido a la plantilla.`,
+      : `#${id} ${name} a\u00f1adido a la plantilla.`,
   );
 }
+
 document.addEventListener("click", (e) => {
   const target = e.target.closest("[data-cmd]");
   if (!target) return;
@@ -427,6 +722,219 @@ document.addEventListener("click", (e) => {
     modal.close();
     return;
   }
+  if (cmd === "save-new-roster") {
+    if (!creatingRoster) return;
+
+    if (!teamRoster.length) {
+      toast("A\u00f1ade al menos un jugador antes de guardar la plantilla.");
+      return;
+    }
+
+    show(
+      "Guardar plantilla",
+      `<form id="save-roster-form" onsubmit="return false">
+        <label>
+          Nombre de la plantilla
+          <input
+            type="text"
+            name="name"
+            maxlength="60"
+            required
+            autofocus
+            placeholder="Ej. CV Ciutadella"
+          />
+        </label>
+
+        <div class="dialog-actions">
+          <button
+            class="primary"
+            type="button"
+            data-cmd="confirm-save-new-roster"
+          >
+            Guardar plantilla
+          </button>
+
+          <button type="button" data-cmd="close">
+            Cancelar
+          </button>
+        </div>
+      </form>`,
+    );
+
+    return;
+  }
+
+  if (cmd === "confirm-save-new-roster") {
+    if (!creatingRoster) return;
+
+    const form = document.querySelector("#save-roster-form");
+    const name = String(new FormData(form).get("name") || "").trim();
+
+    if (!name) {
+      toast("Introduce un nombre para la plantilla.");
+      return;
+    }
+
+    if (
+      savedRosters.some(
+        (roster) => roster.name.trim().toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      toast("Ya existe una plantilla con ese nombre.");
+      return;
+    }
+
+    if (!teamRoster.length) {
+      toast("La plantilla no tiene jugadores.");
+      return;
+    }
+
+    const id =
+      globalThis.crypto?.randomUUID?.() ??
+      `roster-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const newRoster = {
+      id,
+      name,
+      players: structuredClone(teamRoster),
+    };
+
+    const nextSavedRosters = [...savedRosters, newRoster];
+
+    try {
+      saveRosters(nextSavedRosters);
+      savedRosters = nextSavedRosters;
+      storageError = false;
+    } catch {
+      storageError = true;
+      toast("No se pudo guardar la plantilla.");
+      return;
+    }
+
+    modal.close();
+
+    teamRoster = [];
+    selectedRosterId = null;
+    creatingRoster = false;
+
+    render();
+    toast(`Plantilla "${name}" guardada.`);
+    return;
+  }
+
+  if (cmd === "cancel-new-roster") {
+    teamRoster = [];
+    selectedRosterId = null;
+    creatingRoster = false;
+    render();
+    return;
+  }
+
+  if (cmd === "delete-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+
+    if (!roster) {
+      toast("No se encontr\u00f3 la plantilla.");
+      return;
+    }
+
+    show(
+      "Eliminar plantilla",
+      `<p>
+        \u00bfSeguro que quieres eliminar <b>${esc(roster.name)}</b>?
+      </p>
+      <p class="muted">
+        Esta acci\u00f3n elimina la plantilla de este dispositivo,
+        pero no modifica los partidos que ya tengan una copia de sus jugadores.
+      </p>
+      <div class="dialog-actions">
+        <button
+          type="button"
+          data-cmd="confirm-delete-roster:${roster.id}"
+        >
+          Eliminar plantilla
+        </button>
+
+        <button
+          class="primary"
+          type="button"
+          data-cmd="close"
+        >
+          Cancelar
+        </button>
+      </div>`,
+    );
+
+    return;
+  }
+
+  if (cmd === "confirm-delete-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+
+    if (!roster) {
+      modal.close();
+      toast("La plantilla ya no existe.");
+      return;
+    }
+
+    const nextSavedRosters = savedRosters.filter(
+      (item) => item.id !== roster.id,
+    );
+
+    try {
+      saveRosters(nextSavedRosters);
+      savedRosters = nextSavedRosters;
+      storageError = false;
+    } catch {
+      storageError = true;
+      toast("No se pudo eliminar la plantilla.");
+      return;
+    }
+
+    if (selectedRosterId === roster.id) {
+      selectedRosterId = null;
+      teamRoster = [];
+    }
+
+    modal.close();
+
+    if (!savedRosters.length) {
+      selectedRosterId = null;
+      teamRoster = [];
+      creatingRoster = true;
+      page = "setup";
+    }
+
+    render();
+    toast(`Plantilla "${roster.name}" eliminada.`);
+    return;
+  }
+
+  if (cmd === "use-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+
+    if (!roster) {
+      toast("No se encontr\u00f3 la plantilla.");
+      return;
+    }
+
+    selectedRosterId = roster.id;
+    teamRoster = structuredClone(roster.players);
+    creatingRoster = false;
+    page = "setup";
+    render();
+    return;
+  }
+
+  if (cmd === "new-roster") {
+    selectedRosterId = null;
+    teamRoster = [];
+    creatingRoster = true;
+    page = "setup";
+    render();
+    return;
+  }
+
   if (cmd === "nav") {
     page = value;
     render();

@@ -15,35 +15,183 @@ const context=await browser.newContext({viewport:{width:1024,height:600}});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
 const url=`http://127.0.0.1:${server.address().port}`;
 const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')));
-async function reset(s=initial()) {s.demo=false;await page.goto(url);await page.evaluate(s=>localStorage.setItem('volleystats.match.v1',JSON.stringify(s)),s);await page.reload();await page.locator('.court').waitFor();}
+async function reset(s=initial()) {
+ s.demo=false;
+ await page.goto(url);
+ await page.evaluate(s=>{
+  localStorage.clear();
+  localStorage.setItem('volleystats.match.v1',JSON.stringify(s));
+  localStorage.setItem(
+   'volleystats.rosters.v1',
+   JSON.stringify([
+    {
+     id:'test-roster',
+     name:'Plantilla test',
+     players:s.roster,
+    },
+   ]),
+  );
+ },s);
+ await page.reload();
+ await page.locator('.court').waitFor();
+}
 async function tap(cmd){await page.locator(`[data-cmd="${cmd}"]`).first().click();}
 async function commit(cmd){await page.waitForTimeout(420);await tap(cmd);}
 async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
 try{
- await check('Primera entrada, plantilla propia, alineación, recarga y archivo',async()=>{
-  await page.goto(url);await page.evaluate(()=>localStorage.clear());await page.reload();
-  assert.match(await page.locator('main').innerText(),/Bienvenido/);equal(await state(),null);
+ await check('Primera entrada, multiples plantillas, alineacion, recarga y archivo',async()=>{
+  await page.goto(url);
+  await page.evaluate(()=>localStorage.clear());
+  await page.reload();
+
+  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+  equal(await state(),null);
+
   for(let id=21;id<=26;id++){
-   await tap('add-roster-player');await page.locator('[name="id"]').fill(String(id));await page.locator('[name="name"]').fill('Jugador '+id);
-   await page.selectOption('[name="role"]','Receptor');await tap('save-roster-player');
+   await tap('add-roster-player');
+   await page.locator('[name="id"]').fill(String(id));
+   await page.locator('[name="name"]').fill('Jugador '+id);
+   await page.selectOption('[name="role"]','Receptor');
+   await tap('save-roster-player');
   }
-  await page.reload();assert.match(await page.locator('main').innerText(),/6 jugadores guardados/);
+
+  assert.match(await page.locator('main').innerText(),/6 jugadores/);
+  equal(
+   await page.evaluate(()=>localStorage.getItem('volleystats.rosters.v1')),
+   null,
+  );
+
+  await tap('save-new-roster');
+  await page.locator('[name="name"]').fill('Equipo test');
+  await tap('confirm-save-new-roster');
+
+  const rosters=await page.evaluate(
+   ()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')),
+  );
+
+  equal(rosters.length,1);
+  equal(rosters[0].name,'Equipo test');
+  equal(rosters[0].players.map(p=>p.id),[21,22,23,24,25,26]);
+
+  assert.match(
+   await page.locator('main').innerText(),
+   /Selecciona una plantilla/,
+  );
+
+  await tap('use-roster:'+rosters[0].id);
+
   await page.locator('[name="rival"]').fill('Rival real');
-  for(let zone=1;zone<=6;zone++)await page.selectOption('[name="zone'+zone+'"]',String(20+zone));
+
+  for(let zone=1;zone<=6;zone++)
+   await page.selectOption(
+    '[name="zone'+zone+'"]',
+    String(20+zone),
+   );
+
   await page.selectOption('[name="serving"]','ours');
-  await page.selectOption('[name="zone6"]','21');await page.locator('#match-setup button[type="submit"]').click();
-  equal(await state(),null);assert.match(await page.locator('#toast').innerText(),/distintos/);
-  await page.selectOption('[name="zone6"]','26');await page.locator('#match-setup button[type="submit"]').click();
-  const created=await state();equal(created.demo,false);equal(created.lineup,[21,22,23,24,25,26]);equal(created.serving,true);equal(created.score,[0,0]);
-  await tap('player:21');await tap('action:Ataque');await tap('grade:-');await page.reload();equal((await state()).events[0].grade,'-');equal((await state()).score,[0,0]);
-  await tap('new-match');await page.locator('[name="rival"]').fill('Segundo rival');
-  for(let zone=1;zone<=6;zone++)await page.selectOption('[name="zone'+zone+'"]',String(20+zone));
-  await page.selectOption('[name="serving"]','theirs');await page.locator('#match-setup button[type="submit"]').click();
-  equal((await state()).serving,false);await tap('new-match');await tap('resume-match:'+created.id);equal((await state()).events.length,1);
+
+  await page.selectOption('[name="zone6"]','21');
+  await page.locator('#match-setup button[type="submit"]').click();
+
+  equal(await state(),null);
+  assert.match(await page.locator('#toast').innerText(),/distintos/);
+
+  await page.selectOption('[name="zone6"]','26');
+  await page.locator('#match-setup button[type="submit"]').click();
+
+  const created=await state();
+
+  equal(created.demo,false);
+  equal(created.lineup,[21,22,23,24,25,26]);
+  equal(created.serving,true);
+  equal(created.score,[0,0]);
+
+  await tap('player:21');
+  await tap('action:Ataque');
+  await tap('grade:-');
+  await page.reload();
+
+  equal((await state()).events[0].grade,'-');
+  equal((await state()).score,[0,0]);
+
+  await tap('new-match');
+  await page.locator('[name="rival"]').fill('Segundo rival');
+
+  for(let zone=1;zone<=6;zone++)
+   await page.selectOption(
+    '[name="zone'+zone+'"]',
+    String(20+zone),
+   );
+
+  await page.selectOption('[name="serving"]','theirs');
+  await page.locator('#match-setup button[type="submit"]').click();
+
+  equal((await state()).serving,false);
+
+  await tap('new-match');
+  await tap('resume-match:'+created.id);
+
+  equal((await state()).events.length,1);
+
   await page.evaluate(()=>localStorage.clear());
  });
+
+ await check('Eliminar plantillas guardadas',async()=>{
+  await page.goto(url);
+
+  await page.evaluate(()=>{
+   localStorage.clear();
+
+   const players=Array.from({length:6},(_,i)=>({
+    id:i+1,
+    name:'Jugador '+(i+1),
+    role:'Receptor',
+   }));
+
+   localStorage.setItem(
+    'volleystats.rosters.v1',
+    JSON.stringify([
+     {id:'roster-a',name:'Equipo A',players},
+     {id:'roster-b',name:'Equipo B',players},
+    ]),
+   );
+  });
+
+  await page.reload();
+
+  equal(await page.locator('.roster-grid article').count(),2);
+
+  await tap('delete-roster:roster-a');
+  assert.match(await page.locator('#modal').innerText(),/Equipo A/);
+  await tap('close');
+
+  equal(
+   await page.evaluate(
+    ()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')).length,
+   ),
+   2,
+  );
+
+  await tap('delete-roster:roster-a');
+  await tap('confirm-delete-roster:roster-a');
+
+  equal(await page.locator('.roster-grid article').count(),1);
+
+  await page.reload();
+
+  assert.doesNotMatch(await page.locator('main').innerText(),/Equipo A/);
+  assert.match(await page.locator('main').innerText(),/Equipo B/);
+
+  await tap('delete-roster:roster-b');
+  await tap('confirm-delete-roster:roster-b');
+
+  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+
+  await page.evaluate(()=>localStorage.clear());
+ });
+
  await check('Puntos, recuperacion del saque, doble toque y deshacer',async()=>{
   await reset();const before=await state();await tap('ours');let s=await state();equal(s.score,[1,0]);equal(s.rotation,2);equal(s.lineup,[9,12,7,8,15,4]);
   await page.waitForTimeout(420);await page.locator('[data-cmd="ours"]').dblclick();equal((await state()).score,[2,0]);
@@ -76,7 +224,7 @@ try{
   const rosterBefore=(await state()).roster;
   await tap('add-roster-player');await page.locator('[name="id"]').fill('22');await page.locator('[name="name"]').fill('Irene');await page.selectOption('[name="role"]','Receptor');await tap('save-roster-player');
   equal(await page.locator('.roster-grid article').count(),11);
-  assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene')));
+  assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(p=>p.id===22&&p.name==='Irene')));
   equal((await state()).roster,rosterBefore);
   equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
   await page.reload();await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),11);
@@ -89,14 +237,14 @@ try{
    await tap('save-roster-edit:22');
 
    assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
-   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
    equal((await state()).roster,rosterBefore);
    equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
 
    await page.reload();
    await tap('nav:roster');
    assert.match(await page.locator('.roster-grid').innerText(),/Irene Editada/);
-   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.roster.v1')).some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
+   assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(p=>p.id===22&&p.name==='Irene Editada'&&p.role==='L\u00edbero')));
    equal((await state()).roster,rosterBefore);
    equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
 
@@ -107,7 +255,7 @@ try{
    assert(await page.locator('#modal').evaluate(el=>el.open));
    assert.match(await page.locator('.dialog-toast.show').innerText(),/utilizado/);
    assert(await page.evaluate(()=>{
-     const roster=JSON.parse(localStorage.getItem('volleystats.roster.v1'));
+     const roster=JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players;
      return roster.some(p=>p.id===22&&p.name==='Irene Editada') &&
        roster.filter(p=>p.id===4).length===1;
    }));
@@ -155,14 +303,78 @@ try{
   },legacy);
   await page.reload();
   await page.locator('.court').waitFor();
-  equal(await state(),legacy);
-  assert(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')!==null));
-  assert(await page.evaluate(()=>localStorage.getItem('volleystats.roster.v1')!==null));
+
+  const migrated=await state();
+  const {rosterId,...migratedWithoutRosterId}=migrated;
+
+  equal(migratedWithoutRosterId,legacy);
+  equal(rosterId,'imported-roster-v1');
+
+  assert(
+   await page.evaluate(
+    ()=>localStorage.getItem('volleystats.match.v1')!==null,
+   ),
+  );
+
+  assert(
+   await page.evaluate(
+    ()=>localStorage.getItem('volleystats.roster.v1')!==null,
+   ),
+  );
+
+  const migratedRosters=await page.evaluate(
+   ()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')),
+  );
+
+  equal(migratedRosters.length,1);
+  equal(migratedRosters[0].id,'imported-roster-v1');
+  equal(migratedRosters[0].players,legacy.roster);
+
+  equal(
+   await page.evaluate(
+    ()=>JSON.parse(localStorage.getItem('volleystats.match.v1')).rosterId,
+   ),
+   'imported-roster-v1',
+  );
  });
  await check('Datos guardados invalidos no dejan la pantalla en blanco',async()=>{
-  await reset();await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('volleystats.match.v1'));s.lineup[0]=999;localStorage.setItem('volleystats.match.v1',JSON.stringify(s))});await page.reload();await page.locator('.setup-card').waitFor({timeout:3000});assert.match(await page.locator('[role="alert"]').innerText(),/almacenamiento/);
-  await page.locator('[name="rival"]').fill('Nuevo rival');const ids=await page.locator('[name="zone1"] option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));
-  for(let i=1;i<=6;i++)await page.selectOption('[name="zone'+i+'"]',ids[i-1]);await page.selectOption('[name="serving"]','ours');await page.locator('#match-setup button[type="submit"]').click();equal((await state()).lineup[0],999);assert.match(await page.locator('#toast').innerText(),/no se puede leer/);
+  await reset();
+
+  await page.evaluate(()=>{
+   const s=JSON.parse(localStorage.getItem('volleystats.match.v1'));
+   s.lineup[0]=999;
+   localStorage.setItem('volleystats.match.v1',JSON.stringify(s));
+  });
+
+  await page.reload();
+
+  await page.locator('.setup-card').waitFor({timeout:3000});
+
+  assert.match(
+   await page.locator('[role="alert"]').innerText(),
+   /almacenamiento/,
+  );
+
+  await tap('use-roster:test-roster');
+
+  await page.locator('[name="rival"]').fill('Nuevo rival');
+
+  const ids=await page
+   .locator('[name="zone1"] option')
+   .evaluateAll(options=>options.map(o=>o.value).filter(Boolean));
+
+  for(let i=1;i<=6;i++)
+   await page.selectOption('[name="zone'+i+'"]',ids[i-1]);
+
+  await page.selectOption('[name="serving"]','ours');
+  await page.locator('#match-setup button[type="submit"]').click();
+
+  equal((await state()).lineup[0],999);
+
+  assert.match(
+   await page.locator('#toast').innerText(),
+   /no se puede leer/,
+  );
  });
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));
  if(results.some(r=>!r.ok)||errors.length)process.exitCode=1;
