@@ -472,6 +472,7 @@ try{
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   };
   await reset();
+  const starters=page.locator('.court-panel .court .player[data-zone]');assert.equal(await starters.count(),6);assert.equal(await starters.locator('.player-name').count(),6);assert.equal(await starters.locator('.player-name').evaluateAll(names=>names.every(name=>name.textContent.trim().length>0)),true);assert.equal(await starters.locator('.player-name small').count(),0);const matchState=await state();assert.equal(matchState.roster.some(player=>player.role==='Colocador'&&matchState.lineup.includes(player.id)),true);
   for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');}
   const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await page.setViewportSize({width:768,height:1024});await tap('next');await page.locator('.setup-court').waitFor();await assertZoneLayout('.setup-court');
  });

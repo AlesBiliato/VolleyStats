@@ -224,7 +224,7 @@ function court() {
     .map((zone, i) => {
       const p = player(state.lineup[zone - 1]);
 
-      return `<button class="player ${p.role === "Líbero" ? "libero" : ""} ${selected === p.id ? "selected" : ""}" style="--col:${i % 3};--row:${Math.floor(i / 3)}" data-cmd="player:${p.id}" data-zone="${zone}" aria-label="Dorsal ${p.id}, ${esc(p.name)}, zona ${zone}" ${state.status !== "playing" ? "disabled" : ""}><span class="player-marker"><span class="jersey">${p.id}</span><span class="zone">${zone}</span></span><span class="player-name">${esc(p.name)} <small>${p.role === "Colocador" ? "C" : ""}</small></span></button>`;
+      return `<button class="player ${p.role === "Líbero" ? "libero" : ""} ${selected === p.id ? "selected" : ""}" style="--col:${i % 3};--row:${Math.floor(i / 3)}" data-cmd="player:${p.id}" data-zone="${zone}" aria-label="Dorsal ${p.id}, ${esc(p.name)}, zona ${zone}" ${state.status !== "playing" ? "disabled" : ""}><span class="player-marker"><span class="jersey">${p.id}</span><span class="zone">${zone}</span></span><span class="player-name">${esc(p.name)}</span></button>`;
     })
     .join(
       "",
