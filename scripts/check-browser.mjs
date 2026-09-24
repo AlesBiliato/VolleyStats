@@ -138,6 +138,81 @@ try{
   await page.evaluate(()=>localStorage.clear());
  });
 
+ await check('Renombrar plantillas guardadas',async()=>{
+  await page.goto(url);
+
+  await page.evaluate(()=>{
+   localStorage.clear();
+
+   const players=Array.from({length:6},(_,i)=>({
+    id:i+1,
+    name:'Jugador '+(i+1),
+    role:'Receptor',
+   }));
+
+   localStorage.setItem(
+    'volleystats.rosters.v1',
+    JSON.stringify([
+     {id:'roster-a',name:'Equipo A',players},
+     {id:'roster-b',name:'Equipo B',players},
+    ]),
+   );
+  });
+
+  await page.reload();
+
+  await tap('rename-roster:roster-a');
+
+  equal(
+   await page.locator(
+    '#rename-roster-form [name="name"]',
+   ).inputValue(),
+   'Equipo A',
+  );
+
+  await page.locator(
+   '#rename-roster-form [name="name"]',
+  ).fill('Equipo B');
+
+  await tap('confirm-rename-roster:roster-a');
+
+  assert.match(
+   await page.locator('.dialog-toast.show').innerText(),
+   /Ya existe/,
+  );
+
+  await page.locator(
+   '#rename-roster-form [name="name"]',
+  ).fill('Equipo Renombrado');
+
+  await tap('confirm-rename-roster:roster-a');
+
+  const rosters=await page.evaluate(
+   ()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')),
+  );
+
+  const renamed=rosters.find(
+   roster=>roster.id==='roster-a',
+  );
+
+  equal(renamed.name,'Equipo Renombrado');
+  equal(renamed.id,'roster-a');
+
+  await page.reload();
+
+  assert.match(
+   await page.locator('main').innerText(),
+   /Equipo Renombrado/,
+  );
+
+  assert.doesNotMatch(
+   await page.locator('main').innerText(),
+   /Equipo A/,
+  );
+
+  await page.evaluate(()=>localStorage.clear());
+ });
+
  await check('Eliminar plantillas guardadas',async()=>{
   await page.goto(url);
 

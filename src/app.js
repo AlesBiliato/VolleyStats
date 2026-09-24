@@ -435,6 +435,7 @@ function renderRosterSelector() {
 
                   <div class="dialog-actions">
                     ${button("Usar plantilla", `use-roster:${roster.id}`, "primary")}
+                    ${button("Renombrar", `rename-roster:${roster.id}`)}
                     ${button("Eliminar", `delete-roster:${roster.id}`)}
                   </div>
                 </article>
@@ -827,6 +828,103 @@ document.addEventListener("click", (e) => {
     selectedRosterId = null;
     creatingRoster = false;
     render();
+    return;
+  }
+
+  if (cmd === "rename-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+
+    if (!roster) {
+      toast("No se encontr\u00f3 la plantilla.");
+      return;
+    }
+
+    show(
+      "Renombrar plantilla",
+      `<form id="rename-roster-form" onsubmit="return false">
+        <label>
+          Nombre de la plantilla
+          <input
+            type="text"
+            name="name"
+            maxlength="60"
+            required
+            autofocus
+            value="${esc(roster.name)}"
+          />
+        </label>
+
+        <div class="dialog-actions">
+          <button
+            class="primary"
+            type="button"
+            data-cmd="confirm-rename-roster:${roster.id}"
+          >
+            Guardar nombre
+          </button>
+
+          <button type="button" data-cmd="close">
+            Cancelar
+          </button>
+        </div>
+      </form>`,
+    );
+
+    return;
+  }
+
+  if (cmd === "confirm-rename-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+
+    if (!roster) {
+      modal.close();
+      toast("La plantilla ya no existe.");
+      return;
+    }
+
+    const form = document.querySelector("#rename-roster-form");
+    const name = String(new FormData(form).get("name") || "").trim();
+
+    if (!name) {
+      toast("Introduce un nombre para la plantilla.");
+      return;
+    }
+
+    if (
+      savedRosters.some(
+        (item) =>
+          item.id !== roster.id &&
+          item.name.trim().toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      toast("Ya existe una plantilla con ese nombre.");
+      return;
+    }
+
+    if (name === roster.name) {
+      modal.close();
+      return;
+    }
+
+    const nextSavedRosters = savedRosters.map((item) =>
+      item.id === roster.id
+        ? { ...item, name }
+        : item,
+    );
+
+    try {
+      saveRosters(nextSavedRosters);
+      savedRosters = nextSavedRosters;
+      storageError = false;
+    } catch {
+      storageError = true;
+      toast("No se pudo cambiar el nombre de la plantilla.");
+      return;
+    }
+
+    modal.close();
+    render();
+    toast(`Plantilla renombrada a "${name}".`);
     return;
   }
 
