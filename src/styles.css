@@ -2282,6 +2282,59 @@ dialog.stats-dialog {
   margin: 24px auto 0;
 }
 
+.setup-court-layout {
+  display: grid;
+  grid-template-areas: "back court forward";
+  grid-template-columns: 58px minmax(0, 650px) 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.setup-court-layout .setup-court-wrap {
+  grid-area: court;
+  width: 100%;
+  margin: 0;
+}
+
+.lineup-rotation-control {
+  width: 58px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 9px 5px;
+  border-color: #b9c9b3;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lineup-rotation-control > span {
+  font-size: 25px;
+  line-height: 1;
+}
+
+.lineup-rotation-control small {
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.lineup-rotation-control:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.lineup-rotation-back {
+  grid-area: back;
+}
+
+.lineup-rotation-forward {
+  grid-area: forward;
+}
+
 .setup-court {
   height: clamp(360px, 48vw, 500px) !important;
   min-height: 360px;
@@ -2328,6 +2381,31 @@ dialog.stats-dialog {
 
 .lineup-picker {
   width: min(480px, 78vw);
+}
+
+@media (max-width: 760px) {
+  .setup-court-layout {
+    grid-template-areas:
+      "court court"
+      "back forward";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .lineup-rotation-control {
+    width: 100%;
+    min-height: 42px;
+    flex-direction: row;
+    padding: 8px 12px;
+  }
+
+  .lineup-rotation-control > span {
+    font-size: 20px;
+  }
+
+  .lineup-rotation-control small {
+    font-size: 10px;
+  }
 }
 
 .setup-choice-grid {

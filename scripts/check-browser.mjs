@@ -36,6 +36,7 @@ async function reset(s=initial()) {
  await page.locator('.court').waitFor();
 }
 async function tap(cmd){await page.locator(`[data-cmd="${cmd}"]`).first().click();}
+async function setupLineup(){return page.locator('.setup-lineup-player').evaluateAll((buttons)=>buttons.sort((a,b)=>Number(a.dataset.setupZone)-Number(b.dataset.setupZone)).map((button)=>Number(button.querySelector('.jersey').textContent.trim())));}
 async function commit(cmd){await page.waitForTimeout(420);await tap(cmd);}
 async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
@@ -553,6 +554,8 @@ try{
   await tap('prepare-set-1');
   assert.equal(await page.locator('.setup-lineup-player').count(),6);
   assert.match(await page.locator('.lineup-progress').innerText(),/0\s*\/\s*6/);
+  assert.equal(await page.locator('[data-cmd^="rotate-lineup:"]').count(),2);
+  assert.equal(await page.locator('[data-cmd^="rotate-lineup:"]:disabled').count(),2);
   assert.equal(await page.locator('.roster-grid').count(),0);
   assert.equal(await page.locator('[data-cmd="manage-roster"]').count(),0);
   assert.equal(await page.locator('#match-basics-form').count(),0);
@@ -563,7 +566,21 @@ try{
    await tap('choose-lineup-player:'+zone+','+id);
   }
   assert.match(await page.locator('main').innerText(),/Sexteto inicial completo/);
+  assert.equal(await page.locator('[data-cmd^="rotate-lineup:"]:disabled').count(),0);
+  equal(await setupLineup(),[4,9,12,7,8,15]);
+  await tap('rotate-lineup:forward');equal(await setupLineup(),[9,12,7,8,15,4]);
+  await tap('rotate-lineup:forward');equal(await setupLineup(),[12,7,8,15,4,9]);
+  await tap('rotate-lineup:back');equal(await setupLineup(),[9,12,7,8,15,4]);
+  await tap('rotate-lineup:back');equal(await setupLineup(),[4,9,12,7,8,15]);
+  await tap('rotate-lineup:forward');equal(await setupLineup(),[9,12,7,8,15,4]);
+  assert.match(await page.locator('.lineup-progress').innerText(),/6\s*\/\s*6/);
+  assert.equal(new Set(await setupLineup()).size,6);
   equal(await state(),null);
+  await tap('continue-lineup');
+  assert.match(await page.locator('main').innerText(),/Elegir líbero/);
+  await tap('back-to-lineup');
+  equal(await setupLineup(),[9,12,7,8,15,4]);
+  await tap('rotate-lineup:back');equal(await setupLineup(),[4,9,12,7,8,15]);
   await tap('continue-lineup');
   assert.match(await page.locator('main').innerText(),/Elegir líbero/);
   assert.equal(await page.locator('.setup-lineup-player').count(),0);
@@ -615,24 +632,28 @@ try{
   const preparedSetTwo=await page.locator('.setup-lineup-player').evaluateAll((buttons)=>Object.fromEntries(buttons.map((button)=>[Number(button.dataset.setupZone),Number(button.querySelector('.jersey').textContent.trim())])));
   equal(preparedSetTwo,{1:4,2:9,3:12,4:7,5:8,6:15});
   assert.notDeepEqual(Object.values(preparedSetTwo),finalSetOneLineup);
+  assert.equal(await page.locator('[data-cmd^="rotate-lineup:"]:disabled').count(),0);
   await tap('set-zone:6');
   await tap('choose-lineup-player:6,6');
+  await tap('rotate-lineup:forward');
+  equal(await setupLineup(),[9,12,7,8,6,4]);
   await tap('continue-lineup');
   assert.equal(await page.locator('[data-cmd="set-libero:1"].selected').count(),1);
   await tap('continue-libero');
   await tap('set-serving:theirs');
   await tap('start-match');
   const second=await state();
-  equal(second.lineup,[4,9,12,7,8,6]);
+  equal(second.lineup,[9,12,7,8,6,4]);
   assert.equal(second.set,2);equal(second.score,[0,0]);assert.equal(second.rotation,1);
   assert.equal(second.serving,false);assert.equal(second.activeLiberoId,1);
-  equal(second.setStarts[1],{set:2,lineup:[4,9,12,7,8,6],activeLiberoId:1,serving:false});
+  equal(second.setStarts[0].lineup,[4,9,12,7,8,15]);
+  equal(second.setStarts[1],{set:2,lineup:[9,12,7,8,6,4],activeLiberoId:1,serving:false});
   await tap('finish');
   await commit('confirm-finish');
   await tap('next');
   assert.match(await page.locator('main').innerText(),/Preparar Set 3/);
   const preparedSetThree=await page.locator('.setup-lineup-player').evaluateAll((buttons)=>Object.fromEntries(buttons.map((button)=>[Number(button.dataset.setupZone),Number(button.querySelector('.jersey').textContent.trim())])));
-  equal(preparedSetThree,{1:4,2:9,3:12,4:7,5:8,6:6});
+  equal(preparedSetThree,{1:9,2:12,3:7,4:8,5:6,6:4});
  });
 
  console.log(JSON.stringify({passed:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length,browserErrors:errors},null,2));

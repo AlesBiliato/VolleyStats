@@ -228,6 +228,20 @@ function sanitizeSetLineupDraft() {
   });
 }
 
+function rotateSetLineupDraft(direction) {
+  sanitizeSetLineupDraft();
+  if (
+    setLineupDraft.some((playerId) => playerId === null) ||
+    new Set(setLineupDraft).size !== 6
+  ) return false;
+  if (direction === "forward") {
+    setLineupDraft = [...setLineupDraft.slice(1), setLineupDraft[0]];
+  } else if (direction === "back") {
+    setLineupDraft = [setLineupDraft.at(-1), ...setLineupDraft.slice(0, -1)];
+  } else return false;
+  return true;
+}
+
 function setupPlayerById(playerId) {
   return (
     teamRoster.find(
@@ -333,7 +347,11 @@ function setLineupContent(setNumber = preparingSetNumber) {
         </span>
       </div>
 
-      <div class="setup-court-wrap">
+      <div class="setup-court-layout">
+        <button type="button" class="lineup-rotation-control lineup-rotation-back" data-cmd="rotate-lineup:back" aria-label="Retroceder rotación" title="Retroceder rotación" ${completed !== 6 ? "disabled" : ""}>
+          <span aria-hidden="true">←</span><small>Retroceder</small>
+        </button>
+        <div class="setup-court-wrap">
         <div class="net-label">
           CAMPO RIVAL
         </div>
@@ -407,6 +425,10 @@ function setLineupContent(setNumber = preparingSetNumber) {
 
           <span>Zonas 1–6</span>
         </div>
+        </div>
+        <button type="button" class="lineup-rotation-control lineup-rotation-forward" data-cmd="rotate-lineup:forward" aria-label="Avanzar rotación" title="Avanzar rotación" ${completed !== 6 ? "disabled" : ""}>
+          <span aria-hidden="true">→</span><small>Avanzar</small>
+        </button>
       </div>
 
       <div class="dialog-actions">
@@ -1584,6 +1606,11 @@ document.addEventListener("click", (e) => {
   if (cmd === "cancel-set-preparation") {
     page = "match";
     render();
+    return;
+  }
+
+  if (cmd === "rotate-lineup") {
+    if (rotateSetLineupDraft(value)) render();
     return;
   }
 
