@@ -462,7 +462,7 @@ try{
   await reset();await tap('ours');const before=await state();await tap('history');await tap('edit-event:0');await tap('delete-event:0');await tap('confirm-correction');equal((await state()).events.length,0);assert.equal(await page.locator('[data-cmd="undo"]').isDisabled(),false);await page.reload();await undo();equal(await state(),before);
   await tap('history');await tap('edit-event:0');await page.selectOption('[name="kind"]','net');await page.locator('#edit-form button').click();await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('Full')}});await tap('confirm-correction');equal(await state(),before);assert.match(await page.locator('.dialog-toast.show').innerText(),/No se pudo guardar/);
  });
- await check('Etiquetas de zona fuera del dorsal en tablet y desktop',async()=>{
+ await check('Zonas y nombres legibles en tablet y desktop',async()=>{
   const assertZoneLayout=async(courtSelector)=>{
    const players=page.locator(`${courtSelector} .player[data-zone]`);assert.equal(await players.count(),6);
    assert.deepEqual(await players.evaluateAll(items=>items.map(item=>item.dataset.zone)),['4','3','2','5','6','1']);
@@ -471,9 +471,15 @@ try{
    for(const item of geometry){assert.equal(item.overlaps,false,`zona ${item.id} fuera del dorsal`);assert(item.gap>=4,`zona ${item.id} separada del dorsal`);assert.equal(item.inside,true,`zona ${item.id} dentro de la cancha`);assert.equal(item.visible,true,`zona ${item.id} visible`);}
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   };
+  const assertPlayerReadability=async()=>{
+   const layout=await page.evaluate(()=>{const overlaps=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>0.5&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>0.5,court=document.querySelector('.court-panel .court').getBoundingClientRect(),bench=document.querySelector('.bench').getBoundingClientRect();return {starters:[...document.querySelectorAll('.court-panel .court .player[data-zone]')].map(item=>{const name=item.querySelector('.player-name'),nameBox=name.getBoundingClientRect(),jersey=item.querySelector('.jersey').getBoundingClientRect(),zone=item.querySelector('.zone').getBoundingClientRect();return {complete:Boolean(name&&item.querySelector('.jersey')&&item.querySelector('.zone')),font:parseFloat(getComputedStyle(name).fontSize),visible:nameBox.width>0&&nameBox.height>0,inside:nameBox.left>=court.left-0.5&&nameBox.right<=court.right+0.5&&nameBox.top>=court.top-0.5&&nameBox.bottom<=court.bottom+0.5,overlapsJersey:overlaps(nameBox,jersey),overlapsZone:overlaps(nameBox,zone)};}),bench:[...document.querySelectorAll('.bench-player')].map(item=>{const number=item.querySelector('b'),name=item.querySelector('span'),box=item.getBoundingClientRect(),numberBox=number.getBoundingClientRect(),nameBox=name.getBoundingClientRect();return {complete:Boolean(number&&name),numberFont:parseFloat(getComputedStyle(number).fontSize),nameFont:parseFloat(getComputedStyle(name).fontSize),visible:numberBox.width>0&&numberBox.height>0&&nameBox.width>0&&nameBox.height>0,inside:box.left>=bench.left-0.5&&box.right<=bench.right+0.5&&box.top>=bench.top-0.5&&box.bottom<=bench.bottom+0.5,height:box.height};}),horizontalOverflow:document.documentElement.scrollWidth>innerWidth};});
+   assert.equal(layout.starters.length,6);for(const item of layout.starters){assert.equal(item.complete,true);assert(item.font>=13);assert.equal(item.visible,true);assert.equal(item.inside,true);assert.equal(item.overlapsJersey,false);assert.equal(item.overlapsZone,false);}
+   assert(layout.bench.length>0);for(const item of layout.bench){assert.equal(item.complete,true);assert(item.nameFont>=12);assert(item.numberFont>=13);assert.equal(item.visible,true);assert.equal(item.inside,true);assert(item.height<=48);}
+   assert.equal(layout.horizontalOverflow,false);
+  };
   await reset();
   const starters=page.locator('.court-panel .court .player[data-zone]');assert.equal(await starters.count(),6);assert.equal(await starters.locator('.player-name').count(),6);assert.equal(await starters.locator('.player-name').evaluateAll(names=>names.every(name=>name.textContent.trim().length>0)),true);assert.equal(await starters.locator('.player-name small').count(),0);const matchState=await state();assert.equal(matchState.roster.some(player=>player.role==='Colocador'&&matchState.lineup.includes(player.id)),true);
-  for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');}
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');await assertPlayerReadability();}
   const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await page.setViewportSize({width:768,height:1024});await tap('next');await page.locator('.setup-court').waitFor();await assertZoneLayout('.setup-court');
  });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{

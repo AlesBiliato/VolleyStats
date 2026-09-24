@@ -335,6 +335,17 @@ h1 > span {
   font-weight: 600;
   color: #4c6245;
 }
+.court-panel .player-name {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(13px, 1.2vw, 15px);
+  line-height: 1.2;
+}
 .court-caption {
   display: flex;
   justify-content: space-between;
@@ -419,8 +430,17 @@ h1 > span {
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 11px;
   color: #73816d;
+  min-width: 0;
+}
+.bench-player > span {
+  display: block;
+  max-width: clamp(72px, 9vw, 128px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(12px, 1vw, 14px);
+  line-height: 1.2;
 }
 
 .bench-player b {
@@ -432,6 +452,7 @@ h1 > span {
   display: grid;
   place-items: center;
   color: #607554;
+  font-size: clamp(13px, 1.1vw, 15px);
 }
 
 .bench-player.libero b {
@@ -1944,6 +1965,11 @@ dialog.stats-dialog {
   flex: 1;
   gap: 12px;
   flex-wrap: wrap;
+}
+@media (min-width: 651px) {
+  #app .bench-player > span {
+    display: block;
+  }
 }
 
 
