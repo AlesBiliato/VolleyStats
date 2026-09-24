@@ -15,6 +15,10 @@ test('Eliminar la única operación permite volver al comienzo y restaurar',()=>
 test('Una corrección incompatible con acciones posteriores se rechaza',()=>{
  const s=play([{type:'sub',out:4,in:6,label:'Cambio'},{type:'action',player:6,action:'Saque',grade:'#',label:'Saque'}]);assert.throws(()=>correctEvent(s,0,null),/jugadores/);assert.deepEqual(s.lineup,[9,12,7,8,15,6]);
 });
+test('Las correcciones reproducen el cierre de partido sin permitir editarlo ni eliminarlo',()=>{
+ const s=play([point(0),{type:'action',player:7,action:'Recepción',grade:'+',label:'Recepción +'}, {type:'finish-match',label:'Partido finalizado'}]);
+ const n=correctEvent(s,0,point(1));assert.equal(n.status,'finished');assert.equal(n.events.at(-1).type,'finish-match');assert.equal(n.events.at(-1).label,'Partido finalizado');assert.deepEqual(n.score,[0,1]);assert.throws(()=>correctEvent(s,2,null),/cierres/);assert.throws(()=>correctEvent(s,2,{type:'finish-match',label:'Otro cierre'}),/cierres/);
+});
 test('Cambiar jugador, valoración, sustitución y saque inicial',()=>{
  let s=play([{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque'}]);let n=correctEvent(s,0,{type:'action',player:8,action:'Ataque',grade:'Blo',label:'Bloqueado'});assert.deepEqual(n.score,[0,1]);assert.equal(statistics(n).players.find(p=>p.id===8).errors,1);
  s=play([{type:'sub',out:4,in:6,label:'Cambio'}]);n=correctEvent(s,0,{type:'sub',out:4,in:3,label:'Cambio'});assert.equal(n.lineup[0],3);

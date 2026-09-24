@@ -92,7 +92,7 @@ function validSnapshot(data) {
     (data.activeLiberoId === undefined || data.activeLiberoId === null ||
       (Number.isInteger(data.activeLiberoId) && data.roster.some((p) => p.id === data.activeLiberoId && p.role === "Líbero"))) &&
     setStartsValid &&
-    ["playing", "between"].includes(data.status) &&
+    ["playing", "between", "finished"].includes(data.status) &&
     Array.isArray(data.finishedSets) &&
     data.finishedSets.every(
       (s) =>

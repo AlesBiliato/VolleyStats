@@ -21,6 +21,9 @@ test('Guardado y lectura conservan partido, historial y deshacer',()=>{
 test('Persiste y recarga un Ataque - sin perder su valoración',()=>{
  localStore();const state=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});saveMatch(state);assert.equal(loadMatch().events.at(-1).grade,'-');
 });
+test('Persiste y recarga partidos finalizados',()=>{
+ localStore();const state=transition(initial(),{type:'finish-match',label:'Partido finalizado'});saveMatch(state);const loaded=loadMatch();assert.deepEqual(loaded,state);assert.equal(loaded.status,'finished');assert.equal(loaded.events.at(-1).type,'finish-match');
+});
 test('Carga partidos antiguos sin saque en los inicios de set',()=>{
  const old=transition(initial(),{type:'point',team:1,label:'Punto rival'});
  delete old.setStarts[0].serving;for(const snapshot of old.undo)delete snapshot.setStarts[0].serving;

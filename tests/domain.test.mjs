@@ -17,6 +17,17 @@ test('Ataque negativo continúa la jugada sin punto, saque ni rotación',()=>{
   }
 });
 test('Cerrar bloquea el registro, nuevo set conserva alineación y deshacer lo recupera',()=>{let s=transition(initial(),{type:'finish'});assert.equal(transition(s,{type:'point',team:0}),s);const n=transition(s,{type:'next',serving:true});assert.equal(n.set,2);assert.deepEqual(n.score,[0,0]);assert.deepEqual(n.lineup,s.lineup);assert.deepEqual(transition(n,{type:'undo'}),s);assert.deepEqual(JSON.parse(JSON.stringify(n)),n);});
+test('Finalizar partido durante un set conserva el estado deportivo, bloquea operaciones y se deshace',()=>{
+ const s=initial();s.set=3;s.score=[17,12];s.rotation=4;s.lineup=[7,8,15,4,9,12];s.serving=true;s.activeLiberoId=1;s.finishedSets=[{set:1,score:[25,20]},{set:2,score:[21,25]}];s.setStarts=[{set:1,lineup:[4,9,12,7,8,15],activeLiberoId:1,serving:false},{set:2,lineup:[4,9,12,7,8,15],activeLiberoId:1,serving:true},{set:3,lineup:[7,8,15,4,9,12],activeLiberoId:1,serving:true}];
+ const n=transition(s,{type:'finish-match',label:'Partido finalizado'});
+ assert.equal(n.status,'finished');assert.equal(n.set,s.set);assert.deepEqual(n.score,s.score);assert.equal(n.rotation,s.rotation);assert.deepEqual(n.lineup,s.lineup);assert.equal(n.serving,s.serving);assert.equal(n.activeLiberoId,s.activeLiberoId);assert.deepEqual(n.setStarts,s.setStarts);assert.deepEqual(n.finishedSets,s.finishedSets);assert.equal(n.finishedSets.some(set=>set.set===3),false);assert.equal(n.events.at(-1).type,'finish-match');
+ for(const command of [{type:'point',team:0},{type:'action',player:7,action:'Ataque',grade:'#'},{type:'sub',out:7,in:6},{type:'finish'},{type:'next',serving:false},{type:'finish-match'}])assert.equal(transition(n,command),n);
+ assert.deepEqual(transition(n,{type:'undo'}),s);
+});
+test('Finalizar partido entre sets conserva los sets cerrados y undo vuelve a between',()=>{
+ const playing=initial();playing.score=[25,22];const between=transition(playing,{type:'finish',label:'Set 1 finalizado'});const n=transition(between,{type:'finish-match',label:'Partido finalizado'});
+ assert.equal(n.status,'finished');assert.deepEqual(n.finishedSets,between.finishedSets);assert.deepEqual(n.score,between.score);assert.equal(n.events.at(-1).type,'finish-match');assert.deepEqual(transition(n,{type:'undo'}),between);
+});
 test('Cada set conserva una copia independiente de su alineación y líbero iniciales',()=>{
  const firstLineup=[4,9,12,7,8,15];
  let s=createMatch({team:initial().roster,rival:'Rival',lineup:firstLineup,serving:false,activeLiberoId:1});

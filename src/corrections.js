@@ -2,7 +2,7 @@ import {transition} from './domain.js';
 
 export const grades={Saque:['#','+','-','='],'Recepción':['#','+','-','='],Ataque:['#','+','-','=','Blo'],Bloqueo:['#','=']};
 export function eventCommand(event){
- const keys={point:['team','category','reason'],action:['player','action','grade'],sub:['out','in'],finish:[],next:['serving','lineup','activeLiberoId']}[event.type];
+ const keys={point:['team','category','reason'],action:['player','action','grade'],sub:['out','in'],finish:[],'finish-match':[],next:['serving','lineup','activeLiberoId']}[event.type];
  if(!keys)throw Error('Operación no compatible.');
  return Object.fromEntries(['type','label',...keys].filter(k=>event[k]!==undefined).map(k=>[k,event[k]]));
 }

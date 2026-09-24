@@ -49,13 +49,21 @@ export function createMatch({ team, rival, lineup, serving, activeLiberoId = nul
 export function transition(previous, command) {
   const state = structuredClone(previous);
   const { events, undo, ...snapshot } = structuredClone(previous);
-  if (state.status !== "playing" && !["next", "undo"].includes(command.type))
-    return previous;
   if (command.type === "undo") {
     const last = state.undo.pop();
     if (!last) return previous;
     return { ...last, events: state.events.slice(0, -1), undo: state.undo };
   }
+  const canFinishMatch =
+    command.type === "finish-match" &&
+    ["playing", "between"].includes(state.status);
+  const canStartNextSet =
+    command.type === "next" && state.status === "between";
+  const canRecordPlayingCommand =
+    state.status === "playing" &&
+    ["point", "action", "sub", "finish"].includes(command.type);
+  if (!canFinishMatch && !canStartNextSet && !canRecordPlayingCommand)
+    return previous;
   let label = command.label || command.type;
   if (command.type === "point") {
     state.score[command.team]++;
@@ -85,6 +93,8 @@ export function transition(previous, command) {
   } else if (command.type === "finish") {
     state.finishedSets.push({ set: state.set, score: [...state.score] });
     state.status = "between";
+  } else if (command.type === "finish-match") {
+    state.status = "finished";
   } else if (command.type === "next") {
     if (state.set >= 5) return previous;
     const fallbackStart = previous.setStarts?.find(start => start.set === previous.set);

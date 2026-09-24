@@ -582,6 +582,37 @@ h1 > span {
   color: #6b795f;
   min-height: 34px;
 }
+.match-end-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #e6ebdf;
+}
+.match-end-actions.open {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.match-end-actions .finish {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.finish-match {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-color: #d7b4ad;
+  color: #8a3e32;
+  font-size: 11px;
+}
+.danger {
+  border-color: #9b3f32;
+  background: #9b3f32;
+  color: #fff;
+}
+.danger:hover {
+  background: #7f3026;
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1221,9 +1252,8 @@ body {
   display: none;
 }
 #app .finish {
-  margin-top: auto;
   min-height: 36px;
-  padding: 8px 0 0;
+  padding: 0;
 }
 #app .toolbar {
   display: grid;
@@ -1408,9 +1438,13 @@ dialog {
     font-size: 10px;
   }
   #app .finish {
-    grid-column: 1 / -1;
     margin: 0;
     min-height: 30px;
+    padding: 0;
+  }
+  #app .match-end-actions {
+    grid-column: 1 / -1;
+    margin: 0;
     padding-top: 4px;
   }
   #app .toolbar {

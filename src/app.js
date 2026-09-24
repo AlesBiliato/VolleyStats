@@ -191,7 +191,23 @@ function show(title, body) {
   if (!modal.open) modal.showModal();
 }
 function score() {
-  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${state.status === "playing" ? "EN DIRECTO" : "SET FINALIZADO"} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors">${button("Errores nuestros NO forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div>${button(state.status === "playing" ? "Finalizar set →" : state.set < 5 ? "Preparar siguiente set →" : "Ver resumen del partido", state.status === "playing" ? "finish" : state.set < 5 ? "next" : "stats", "finish")}</aside>`;
+  const statusLabel =
+    state.status === "playing"
+      ? "EN DIRECTO"
+      : state.status === "between"
+        ? "SET FINALIZADO"
+        : "PARTIDO FINALIZADO";
+  const setAction =
+    state.status === "playing"
+      ? button("Finalizar set →", "finish", "finish")
+      : state.status === "between" && state.set < 5
+        ? button("Preparar siguiente set →", "next", "finish")
+        : button("Ver estadísticas →", "stats", "finish");
+  const finishMatchAction =
+    state.status === "finished"
+      ? ""
+      : button("Finalizar partido", "finish-match", "finish-match");
+  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors">${button("Errores nuestros NO forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
 }
 function court() {
   const activeLibero = state.activeLiberoId == null
@@ -2341,6 +2357,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "finish") {
+    if (state.status !== "playing") return;
     show(
       "Finalizar set " + state.set,
       `<div class="finish-score">${state.score.join(" – ")}</div><p>Se guardará este resultado. Puedes cerrar el set de prueba con cualquier marcador y deshacer el cierre después.</p><div class="dialog-actions">${button("Seguir jugando", "close")}${button("Confirmar cierre", "confirm-finish", "primary")}</div>`,
@@ -2352,6 +2369,22 @@ document.addEventListener("click", (e) => {
       type: "finish",
       label: `Set ${state.set} finalizado · ${state.score.join("–")}`,
     });
+    return;
+  }
+  if (cmd === "finish-match") {
+    if (!["playing", "between"].includes(state.status)) return;
+    const message =
+      state.status === "playing"
+        ? `<div class="finish-score">${state.score.join(" – ")}</div><p>El partido quedará cerrado. El Set ${state.set} está en curso y no se marcará como set finalizado.</p>`
+        : `<p>El partido quedará cerrado y no se preparará otro set. Los resultados de los sets ya finalizados se conservarán.</p>`;
+    show(
+      "Finalizar partido",
+      `${message}<div class="dialog-actions">${button("Cancelar", "close")}${button("Finalizar partido", "confirm-finish-match", "danger")}</div>`,
+    );
+    return;
+  }
+  if (cmd === "confirm-finish-match") {
+    commit({ type: "finish-match", label: "Partido finalizado" });
     return;
   }
   if (cmd === "next") {

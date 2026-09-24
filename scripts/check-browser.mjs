@@ -383,6 +383,20 @@ try{
   await reset();const before=await state();await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('close');equal(await state(),before);
   await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('confirm-sub:4,6');equal((await state()).lineup,[6,9,12,7,8,15]);await undo();equal(await state(),before);
  });
+ await check('Finalizar partido durante un set, bloquear registro, recargar y deshacer',async()=>{
+  const playing=initial();playing.activeLiberoId=1;playing.setStarts[0].activeLiberoId=1;await reset(playing);await commit('ours');await commit('theirs');const before=await state();
+  await tap('finish-match');assert.match(await page.locator('#modal').innerText(),/Set 1 está en curso/);assert.match(await page.locator('#modal').innerText(),/1\s+–\s+1/);await tap('close');equal(await state(),before);
+  await tap('finish-match');await commit('confirm-finish-match');let finished=await state();equal(finished.status,'finished');equal(finished.score,before.score);equal(finished.set,before.set);equal(finished.finishedSets,before.finishedSets);equal(finished.events.at(-1).type,'finish-match');
+  assert.match(await page.locator('.score-top').innerText(),/PARTIDO FINALIZADO/);assert.equal(await page.locator('[data-cmd="finish"]').count(),0);assert.equal(await page.locator('[data-cmd="next"]').count(),0);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),0);assert(await page.locator('[data-cmd="ours"]').isDisabled());assert(await page.locator('.player').first().isDisabled());assert(await page.locator('.active-libero-control').isDisabled());assert(await page.locator('[data-cmd="sub"]').isDisabled());assert.equal(await page.locator('[data-cmd="new-match"]').count(),1);
+  await page.locator('[data-cmd="ours"]').evaluate(button=>button.click());await page.locator('.player').first().evaluate(button=>button.click());await page.locator('.active-libero-control').evaluate(button=>button.click());equal(await state(),finished);assert.equal(await page.locator('#modal').evaluate(dialog=>dialog.open),false);
+  await tap('history');assert.match(await page.locator('#modal').innerText(),/Partido finalizado/);await tap('close');await page.reload();await page.locator('.court').waitFor();finished=await state();equal(finished.status,'finished');assert.match(await page.locator('.score-top').innerText(),/PARTIDO FINALIZADO/);
+  await undo();equal(await state(),before);
+ });
+ await check('Finalizar partido entre sets conserva el set cerrado y permite deshacer',async()=>{
+  await reset();await commit('ours');await tap('finish');await commit('confirm-finish');const between=await state();equal(between.status,'between');equal(between.finishedSets,[{set:1,score:[1,0]}]);assert.equal(await page.locator('[data-cmd="next"]').count(),1);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),1);
+  await tap('finish-match');assert.match(await page.locator('#modal').innerText(),/no se preparará otro set/);await commit('confirm-finish-match');const finished=await state();equal(finished.status,'finished');equal(finished.finishedSets,between.finishedSets);assert.equal(await page.locator('[data-cmd="next"]').count(),0);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),0);
+  await undo();equal(await state(),between);
+ });
  await check('Cierre, bloqueo, siguiente set y deshacer',async()=>{
   await reset();await tap('ours');await tap('finish');await commit('confirm-finish');const closed=await state();equal(closed.status,'between');assert(await page.locator('[data-cmd="ours"]').isDisabled());assert(await page.locator('[data-cmd="unforced-error"]').isDisabled());
   await tap('next');assert.match(await page.locator('main').innerText(),/Preparar Set 2/);await tap('continue-lineup');await tap('continue-libero');await tap('set-serving:theirs');await tap('start-match');
