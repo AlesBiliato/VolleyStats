@@ -42,7 +42,18 @@ test('Estadísticas agrupan puntos reales, fases, rotación y set sin contar cie
 test('Ataque - cuenta como ataque y calidad negativa, no como error de punto',()=>{
  const s=play([{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'}]);
  const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);assert.equal(p.attackErrors,0);assert.equal(p.negativeActions,1);assert.equal(p.gp,-1);assert.equal(p.points,0);
- const plus=correctEvent(s,0,{type:'action',player:7,action:'Ataque',grade:'+',label:'Ataque +'});assert.deepEqual(plus.score,s.score);assert.equal(statistics(plus).players.find(player=>player.id===7).attack,1); const negative=correctEvent(plus,0,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});assert.deepEqual(negative.score,s.score);assert.equal(statistics(negative).players.find(player=>player.id===7).attackErrors,0);
+ const plus=correctEvent(s,0,{type:'action',player:7,action:'Ataque',grade:'+',label:'Ataque +'});assert.deepEqual(plus.score,s.score);const plusStats=statistics(plus).players.find(player=>player.id===7);assert.equal(plusStats.attack,1);assert.equal(plusStats.kills,0);assert.equal(plusStats.attackErrors,0);assert.equal(plusStats.points,0);assert.equal(plusStats.errors,0);assert.equal(plusStats.positiveActions,1);
+ const negative=correctEvent(plus,0,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});assert.deepEqual(negative.score,s.score);const negativeStats=statistics(negative).players.find(player=>player.id===7);assert.equal(negativeStats.attack,1);assert.equal(negativeStats.kills,0);assert.equal(negativeStats.attackErrors,0);assert.equal(negativeStats.points,0);assert.equal(negativeStats.errors,0);
+});
+test('Las cuatro valoraciones actuales de Ataque conservan intentos y resultados',()=>{
+ const cases=[
+  ['#',[1,0],{kills:1,attackErrors:0,blocked:0,points:1,errors:0}],
+  ['?',[0,0],{kills:0,attackErrors:0,blocked:0,points:0,errors:0}],
+  ['=',[0,1],{kills:0,attackErrors:1,blocked:0,points:0,errors:1}],
+  ['Blo',[0,1],{kills:0,attackErrors:1,blocked:1,points:0,errors:1}],
+ ];
+ for(const [grade,score,expected] of cases){const s=play([{type:'action',player:7,action:'Ataque',grade,label:`Ataque ${grade}`}]);assert.deepEqual(s.score,score);const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);for(const [key,value] of Object.entries(expected))assert.equal(p[key],value,`${grade} ${key}`);}
+ const neutral=play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'}]);const p=statistics(neutral).players.find(player=>player.id===7);assert.equal(p.positiveActions,0);assert.equal(p.negativeActions,0);assert.equal(p.gp,0);
 });
 test('BP cuenta puntos de jugadores en K2 y G-P resta acciones negativas',()=>{
  let s=initial();s.serving=true;

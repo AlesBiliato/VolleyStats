@@ -21,6 +21,12 @@ test('El cambio de líbero rechaza roles no válidos, IDs inexistentes, redundan
  for(const status of ['between','finished']){const closed=structuredClone(s);closed.status=status;assert.equal(transition(closed,{type:'libero-change',activeLiberoId:17}),closed);}
 });
 test('Recepción perfecta no suma, ataque punto sí y error suma rival',()=>{let s=transition(initial(),{type:'action',action:'Recepción',grade:'#'});assert.deepEqual(s.score,[0,0]);s=transition(s,{type:'action',action:'Ataque',grade:'#'});assert.deepEqual(s.score,[1,0]);s=transition(s,{type:'action',action:'Saque',grade:'='});assert.deepEqual(s.score,[1,1]);assert.equal(s.serving,false);});
+test('Ataque ? registra el intento y mantiene marcador, saque, rotación y alineación',()=>{
+ for(const serving of [true,false]){
+  const s=initial();s.serving=serving;const n=transition(s,{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'});
+  assert.deepEqual(n.score,s.score);assert.equal(n.serving,serving);assert.equal(n.rotation,s.rotation);assert.deepEqual(n.lineup,s.lineup);assert.equal(n.events.at(-1).grade,'?');assert.deepEqual(transition(n,{type:'undo'}),s);
+ }
+});
 test('Ataque negativo continúa la jugada sin punto, saque ni rotación',()=>{
   for(const serving of [true,false]){
     const s=initial();s.serving=serving;const n=transition(s,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});

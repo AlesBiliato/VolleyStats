@@ -1384,9 +1384,22 @@ function actionDialog() {
   const activeLiberoSelected = isActiveLibero(selected);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${g === "#" ? (action === "Recepción" ? "#" : "++") : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
     "action",
   );
+}
+function gradeLabel(actionName, grade) {
+  if (grade === "Blo") return "Blq";
+  if (grade === "#" && !["Ataque", "Recepción"].includes(actionName)) return "++";
+  return grade;
+}
+function gradeDescription(actionName, grade) {
+  if (grade === "#") return actionName === "Recepción" ? "Perfecta" : "Punto";
+  if (grade === "?") return "Continúa";
+  if (grade === "+") return "Positiva";
+  if (grade === "-") return actionName === "Saque" ? "Punto rival" : "Free ball";
+  if (grade === "Blo") return "Bloqueado";
+  return "Error";
 }
 function saveRosterPlayer(form, originalId = null) {
   const data = new FormData(form);
@@ -2884,8 +2897,8 @@ function editEvent(index) {
       Object.keys(grades).map((a) => [a, a]),
       e.action,
     )}</select></label><label>Valoración<select name="grade" id="edit-grade">${options(
-      grades[e.action].map((g) => [g, e.action === "Ataque" && g === "Blo" ? "Blq" : g]),
-      e.grade,
+      grades[e.action].map((g) => [g, gradeLabel(e.action, g)]),
+      e.action === "Ataque" && ["+", "-"].includes(e.grade) ? "?" : e.grade,
     )}</select></label>`;
   if (e.type === "sub")
     fields = `<label>Sale<select name="out">${options(players(before.lineup), e.out)}</select></label><label>Entra<select name="in">${options(players(state.roster.filter((p) => !before.lineup.includes(p.id) && p.role !== "Líbero").map((p) => p.id)), e.in)}</select></label>`;
@@ -2920,7 +2933,7 @@ function previewCorrection(index, command) {
 document.addEventListener("change", (e) => {
   if (e.target.id === "edit-action") {
     document.querySelector("#edit-grade").innerHTML = grades[e.target.value]
-      .map((g) => `<option value="${g}">${e.target.value === "Ataque" && g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
+      .map((g) => `<option value="${g}">${gradeLabel(e.target.value, g)}</option>`)
       .join("");
   }
 });
