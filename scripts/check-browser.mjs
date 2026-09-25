@@ -351,20 +351,34 @@ try{
   assert.equal(await page.locator('.bench-player').count(),4,'el banquillo contiene el número real de disponibles');
   assert.match(await page.locator('.bench-note').innerText(),/^4 disponibles$/);
   await tap('sub');
-  assert.match(await page.locator('#modal').innerText(),/LÍBERO ACTIVO/i);
-  assert.deepEqual(await page.locator('#libero-change-form option').allTextContents(),['#1 · Nico','#17 · Segundo libero']);
-  assert.equal(await page.locator('#libero-change-form [name="activeLiberoId"]').inputValue(),'1');
-  assert.equal(await page.locator('#libero-change-form [type="submit"]').isDisabled(),true);
-  await page.selectOption('#libero-change-form [name="activeLiberoId"]','17');
-  assert.equal(await page.locator('#libero-change-form [type="submit"]').isDisabled(),false);
-  await page.locator('#libero-change-form [type="submit"]').click();
+  assert.match(await page.locator('#modal').innerText(),/LÍBERO/i);assert.doesNotMatch(await page.locator('#modal').innerText(),/Revisar cambio|Cambiar líbero activo/);
+  assert.equal(await page.locator('[name="out"],[name="in"]').count(),0);
+  const outButtons=page.locator('[data-sub-group="out"] .sub-player-option'),inButtons=page.locator('[data-sub-group="in"] .sub-player-option'),liberoButtons=page.locator('.libero-candidate-option'),changeButton=page.locator('[data-cmd="review-change"]');
+  assert.equal(await outButtons.count(),6);assert.deepEqual(await outButtons.evaluateAll(buttons=>buttons.map(button=>Number(button.dataset.playerId))),withLibero.lineup);
+  const expectedIncoming=withLibero.roster.filter(player=>!withLibero.lineup.includes(player.id)&&player.role!=='Líbero').map(player=>player.id);assert.deepEqual(await inButtons.evaluateAll(buttons=>buttons.map(button=>Number(button.dataset.playerId))),expectedIncoming);
+  assert.equal(await liberoButtons.count(),1);assert.deepEqual(await liberoButtons.evaluateAll(buttons=>buttons.map(button=>Number(button.dataset.playerId))),[17]);assert.match(await page.locator('.libero-current-card').innerText(),/1/);assert.match(await page.locator('.libero-current-card').innerText(),/Nico/);assert.equal(await changeButton.count(),1);assert.equal(await changeButton.innerText(),'Realizar cambio');assert.equal(await changeButton.isDisabled(),true);
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(()=>{const dialog=document.querySelector('#modal'),dialogBox=dialog.getBoundingClientRect(),buttons=[...document.querySelectorAll('.sub-player-option,.libero-candidate-option')];return {modal:{width:dialogBox.width,height:dialogBox.height},buttons:buttons.map(button=>{const box=button.getBoundingClientRect(),style=getComputedStyle(button);return {height:box.height,fontSize:parseFloat(style.fontSize),inside:box.left>=dialogBox.left-1&&box.right<=dialogBox.right+1,top:Math.round(box.top)};}),rows:new Set(buttons.map(button=>Math.round(button.getBoundingClientRect().top))).size,dialogOverflow:dialog.scrollWidth>dialog.clientWidth+1,pageOverflow:document.documentElement.scrollWidth>innerWidth};});
+   assert(layout.modal.width>=Math.min(900,width-32)-2);assert(layout.modal.height>=Math.min(700,height-32)-2);assert(layout.rows<layout.buttons.length);
+   for(const style of layout.buttons){assert(style.height>=68);assert(style.fontSize>=13);assert.equal(style.inside,true);}
+   assert.equal(layout.dialogOverflow,false);assert.equal(layout.pageOverflow,false);
+   for(const control of await page.locator('.sub-player-option,.libero-candidate-option,#modal [data-cmd="review-change"]').all()){await control.scrollIntoViewIfNeeded();assert.equal(await control.isVisible(),true);}
+  }
+  assert.equal(await liberoButtons.first().evaluate(button=>button.tagName),'BUTTON');await liberoButtons.first().focus();assert.equal(await liberoButtons.first().evaluate(button=>document.activeElement===button),true);
+  const lineupBeforeSelection=(await state()).lineup;await tap('sub-out:4');assert.equal(await page.locator('[data-cmd="sub-out:4"]').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),true);equal((await state()).lineup,lineupBeforeSelection);
+  await tap('sub-in:6');assert.equal(await page.locator('[data-cmd="sub-in:6"]').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),false);equal((await state()).lineup,lineupBeforeSelection);
+  await tap('sub-libero:17');assert.equal(await page.locator('.sub-player-option[aria-pressed="true"]').count(),0);assert.equal(await page.locator('[data-cmd="sub-libero:17"]').getAttribute('aria-pressed'),'true');assert.equal((await state()).activeLiberoId,1);assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),false);
+  await tap('review-change');assert.match(await page.locator('#modal').innerText(),/Confirmar cambio de líbero/);assert.match(await page.locator('#modal').innerText(),/#1 · Nico/);assert.match(await page.locator('#modal').innerText(),/#17 · Segundo libero/);assert.equal((await state()).activeLiberoId,1);await tap('back-to-substitution');assert.equal(await page.locator('[data-cmd="sub-libero:17"]').getAttribute('aria-pressed'),'true');
+  await tap('sub-out:4');assert.equal(await page.locator('.libero-candidate-option[aria-pressed="true"]').count(),0);assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),true);await tap('sub-in:6');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),false);await tap('sub-libero:17');assert.equal(await page.locator('.sub-player-option[aria-pressed="true"]').count(),0);
+  await tap('review-change');await commit('confirm-libero-change:17');
   let changed=await state();assert.equal(changed.activeLiberoId,17);equal(changed.lineup,withLibero.lineup);equal(changed.score,withLibero.score);assert.equal(changed.events.at(-1).type,'libero-change');
   assert.match(await page.locator('.active-libero-control').innerText(),/17/);assert.match(await page.locator('.active-libero-control').innerText(),/Segundo libero/);
   assert.equal(await page.locator('.bench-player[data-player-id="17"]').count(),0);assert.equal(await page.locator('.bench-player[data-player-id="1"]').count(),1);
   await tap('player:17');assert.deepEqual(await page.locator('.grade-options [data-cmd]').evaluateAll(buttons=>buttons.map(button=>button.dataset.cmd)),['grade:#','grade:+','grade:-','grade:=']);assert.equal(await page.locator('.action-options').count(),0);
   await commit('grade:+');let changedEvent=(await state()).events.at(-1);assert.equal(changedEvent.player,17);assert.equal(changedEvent.action,'Recepción');assert.equal(changedEvent.grade,'+');
   await undo();await undo();assert.equal((await state()).activeLiberoId,1);assert.match(await page.locator('.active-libero-control').innerText(),/Nico/);assert.equal(await page.locator('.bench-player[data-player-id="17"]').count(),1);
-  await page.waitForTimeout(420);await tap('sub');await page.selectOption('#libero-change-form [name="activeLiberoId"]','17');await page.locator('#libero-change-form [type="submit"]').click();assert.equal((await state()).activeLiberoId,17);await page.reload();await page.locator('.court').waitFor();assert.equal((await state()).activeLiberoId,17);assert.match(await page.locator('.active-libero-control').innerText(),/Segundo libero/);assert.equal(await page.locator('.bench-player[data-player-id="17"]').count(),0);assert.equal(await page.locator('.bench-player[data-player-id="1"]').count(),1);
+  await page.waitForTimeout(420);await tap('sub');await tap('sub-libero:17');await tap('review-change');await commit('confirm-libero-change:17');assert.equal((await state()).activeLiberoId,17);await page.reload();await page.locator('.court').waitFor();assert.equal((await state()).activeLiberoId,17);assert.match(await page.locator('.active-libero-control').innerText(),/Segundo libero/);assert.equal(await page.locator('.bench-player[data-player-id="17"]').count(),0);assert.equal(await page.locator('.bench-player[data-player-id="1"]').count(),1);
   await tap('finish-match');await commit('confirm-finish-match');assert.equal((await state()).activeLiberoId,17);await page.reload();await page.locator('.court').waitFor();assert.equal((await state()).activeLiberoId,17);assert.match(await page.locator('.active-libero-control').innerText(),/Segundo libero/);assert.equal(await page.locator('.active-libero-control').isDisabled(),true);
 
   await reset(withLibero);
@@ -398,8 +412,8 @@ try{
   await reset();await tap('player:7');await tap('action:Ataque');assert.deepEqual(await page.locator('.grade-options button b').allTextContents(),['++','+','-','=','Blq']);await tap('close');
  });
  await check('Sustitucion cancelada, confirmada y deshecha',async()=>{
-  await reset();const before=await state();await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('close');equal(await state(),before);
-  await tap('sub');await page.selectOption('[name="out"]','4');await page.selectOption('[name="in"]','6');await page.locator('#sub-form button').click();await tap('confirm-sub:4,6');equal((await state()).lineup,[6,9,12,7,8,15]);await undo();equal(await state(),before);
+  await reset();const before=await state();await tap('sub');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),true);await tap('sub-out:4');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),true);await tap('sub-in:6');assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),false);await tap('review-change');equal((await state()).lineup,before.lineup);await tap('back-to-substitution');assert.equal(await page.locator('.sub-player-option[aria-pressed="true"]').count(),2);assert.equal(await page.locator('[data-cmd="review-change"]').isDisabled(),false);await tap('close');equal(await state(),before);
+  await tap('sub');await tap('sub-out:4');await tap('sub-in:6');await tap('review-change');await tap('confirm-sub:4,6');const changed=await state();equal(changed.lineup,[6,9,12,7,8,15]);assert.equal(changed.events.at(-1).type,'sub');assert.equal(changed.events.at(-1).out,4);assert.equal(changed.events.at(-1).in,6);await undo();equal(await state(),before);
  });
  await check('Finalizar partido durante un set, bloquear registro, recargar y deshacer',async()=>{
   const playing=initial();playing.activeLiberoId=1;playing.setStarts[0].activeLiberoId=1;await reset(playing);await commit('ours');await commit('theirs');const before=await state();
@@ -739,9 +753,9 @@ try{
   await tap('theirs');
   await commit('ours');
   await tap('sub');
-  await page.selectOption('[name="out"]','9');
-  await page.selectOption('[name="in"]','6');
-  await page.locator('#sub-form button').click();
+  await tap('sub-out:9');
+  await tap('sub-in:6');
+  await tap('review-change');
   await commit('confirm-sub:9,6');
   const finalSetOneLineup=(await state()).lineup;
   assert.notDeepEqual(finalSetOneLineup,[4,9,12,7,8,15]);

@@ -101,9 +101,17 @@ let statsTab = "General",
 let page = hasMatch && state.demo ? "setup" : "match",
   selected = null,
   action = null,
+  selectedSubOut = null,
+  selectedSubIn = null,
+  selectedLiberoId = null,
   lastTap = 0;
 const app = document.querySelector("#app"),
   modal = document.querySelector("#modal");
+modal.addEventListener("close", () => {
+  selectedSubOut = null;
+  selectedSubIn = null;
+  selectedLiberoId = null;
+});
 const esc = (s) =>
   String(s).replace(
     /[&<>"']/g,
@@ -214,8 +222,35 @@ function commit(command) {
 }
 function show(title, body) {
   modal.classList.toggle("stats-dialog", title === "Estadísticas");
+  modal.classList.toggle("substitution-dialog", title === "Sustitución");
   modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYSTATS</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
   if (!modal.open) modal.showModal();
+}
+function substitutionPlayerButton(player, kind, selectedId) {
+  const isSelected = player.id === selectedId;
+  return `<button type="button" class="sub-player-option ${isSelected ? "selected" : ""}" data-cmd="sub-${kind}:${player.id}" data-player-id="${player.id}" aria-pressed="${isSelected}"><span class="sub-player-number">#${player.id}</span><span class="sub-player-name">${esc(player.name)}</span></button>`;
+}
+function liberoCandidateButton(candidate) {
+  const isSelected = candidate.id === selectedLiberoId;
+  return `<button type="button" class="libero-candidate-option ${isSelected ? "selected" : ""}" data-cmd="sub-libero:${candidate.id}" data-player-id="${candidate.id}" aria-pressed="${isSelected}"><span class="sub-player-number">#${candidate.id}</span><span class="sub-player-name">${esc(candidate.name)}</span></button>`;
+}
+function substitutionDialog() {
+  const outgoing = state.lineup.map((id) => player(id));
+  const incoming = state.roster.filter(
+    (candidate) =>
+      !state.lineup.includes(candidate.id) && candidate.role !== "Líbero",
+  );
+  const liberos = state.roster.filter((candidate) => candidate.role === "Líbero");
+  const activeLibero = liberos.find((candidate) => candidate.id === state.activeLiberoId) || null;
+  const availableLiberos = liberos.filter((candidate) => candidate.id !== state.activeLiberoId);
+  const hasSubstitution = selectedSubOut !== null && selectedSubIn !== null;
+  const hasLiberoChange = availableLiberos.some(
+    (candidate) => candidate.id === selectedLiberoId,
+  );
+  show(
+    "Sustitución",
+    `<p class="substitution-intro">Prepara una sustitución normal o elige un nuevo líbero activo. El cambio solo se aplicará después de confirmarlo.</p><div class="substitution-picker"><section class="sub-player-section" aria-labelledby="sub-out-title"><span class="eyebrow" id="sub-out-title">SALE</span><div class="sub-player-grid" data-sub-group="out">${outgoing.map((candidate) => substitutionPlayerButton(candidate, "out", selectedSubOut)).join("")}</div></section><section class="sub-player-section" aria-labelledby="sub-in-title"><span class="eyebrow" id="sub-in-title">ENTRA</span><div class="sub-player-grid" data-sub-group="in">${incoming.map((candidate) => substitutionPlayerButton(candidate, "in", selectedSubIn)).join("")}</div></section></div><section class="libero-change-section"><span class="eyebrow">LÍBERO</span><div class="libero-choice-grid"><div><span class="libero-choice-label">Líbero activo</span>${activeLibero ? `<div class="libero-current-card"><span class="sub-player-number">#${activeLibero.id}</span><span class="sub-player-name">${esc(activeLibero.name)}</span></div>` : `<div class="libero-current-card empty">Sin líbero activo</div>`}</div><div><span class="libero-choice-label">Líbero suplente</span><div class="libero-candidates">${availableLiberos.length ? availableLiberos.map(liberoCandidateButton).join("") : `<div class="libero-current-card empty">No hay otro líbero disponible</div>`}</div></div></div></section><div class="substitution-submit">${button("Realizar cambio", "review-change", "primary full", !hasSubstitution && !hasLiberoChange)}</div>`,
+  );
 }
 function score() {
   const statusLabel =
@@ -2328,27 +2363,81 @@ document.addEventListener("click", (e) => {
   }
   if (cmd === "sub") {
     if (state.status !== "playing") return;
-    const liberos = state.roster.filter((p) => p.role === "Líbero");
-    show(
-      "Sustitución",
-      `<p>Elige quién sale y quién entra. Los cambios de rol y la gestión automática del líbero se añadirán después.</p><form id="sub-form"><label>Sale<select name="out">${state.lineup.map((id) => `<option value="${id}">#${id} · ${esc(player(id).name)}</option>`).join("")}</select></label><label>Entra<select name="in">${state.roster
-        .filter((p) => !state.lineup.includes(p.id) && p.role !== "Líbero")
-        .map(
-          (p) => `<option value="${p.id}">#${p.id} · ${esc(p.name)}</option>`,
-        )
-        .join(
-          "",
-        )}</select></label><button class="primary full" type="submit">Revisar cambio →</button></form><section class="libero-change-section"><span class="eyebrow">LÍBERO ACTIVO</span>${liberos.length ? `<form id="libero-change-form"><label>Líbero activo<select name="activeLiberoId">${liberos.map((libero) => `<option value="${libero.id}" ${libero.id === state.activeLiberoId ? "selected" : ""}>#${libero.id} · ${esc(libero.name)}</option>`).join("")}</select></label><button class="primary full" type="submit" ${liberos.some((libero) => libero.id === state.activeLiberoId) ? "disabled" : ""}>Cambiar líbero activo</button></form>` : `<p>No hay líberos en la plantilla.</p>`}</section>`,
-    );
+    selectedSubOut = null;
+    selectedSubIn = null;
+    selectedLiberoId = null;
+    substitutionDialog();
+    return;
+  }
+  if (cmd === "sub-out") {
+    const id = Number(value);
+    if (!state.lineup.includes(id)) return;
+    selectedLiberoId = null;
+    selectedSubOut = id;
+    substitutionDialog();
+    return;
+  }
+  if (cmd === "sub-in") {
+    const id = Number(value);
+    if (!state.roster.some((candidate) => candidate.id === id && candidate.role !== "Líbero") || state.lineup.includes(id)) return;
+    selectedLiberoId = null;
+    selectedSubIn = id;
+    substitutionDialog();
+    return;
+  }
+  if (cmd === "sub-libero") {
+    const id = Number(value);
+    if (id === state.activeLiberoId || !state.roster.some((candidate) => candidate.id === id && candidate.role === "Líbero")) return;
+    selectedSubOut = null;
+    selectedSubIn = null;
+    selectedLiberoId = id;
+    substitutionDialog();
+    return;
+  }
+  if (cmd === "review-change") {
+    const activeLibero = player(state.activeLiberoId);
+    const nextLibero = player(selectedLiberoId);
+    if (selectedSubOut !== null && selectedSubIn !== null) {
+      show(
+        "Confirmar sustitución",
+        `<p class="sub-summary">Sale <b>#${selectedSubOut}</b> → Entra <b>#${selectedSubIn}</b></p><div class="dialog-actions">${button("Cancelar", "back-to-substitution")}${button("Confirmar cambio", `confirm-sub:${selectedSubOut},${selectedSubIn}`, "primary")}</div>`,
+      );
+    } else if (nextLibero?.role === "Líbero" && nextLibero.id !== state.activeLiberoId) {
+      show(
+        "Confirmar cambio de líbero",
+        `<div class="libero-change-summary"><p>Sale como líbero activo:</p><strong>${activeLibero ? `#${activeLibero.id} · ${esc(activeLibero.name)}` : "Sin líbero activo"}</strong><p>Nuevo líbero activo:</p><strong>#${nextLibero.id} · ${esc(nextLibero.name)}</strong></div><div class="dialog-actions">${button("Cancelar", "back-to-substitution")}${button("Confirmar cambio", `confirm-libero-change:${nextLibero.id}`, "primary")}</div>`,
+      );
+    }
+    return;
+  }
+  if (cmd === "back-to-substitution") {
+    substitutionDialog();
     return;
   }
   if (cmd === "confirm-sub") {
     const [out, incoming] = value.split(",").map(Number);
+    selectedSubOut = null;
+    selectedSubIn = null;
     commit({
       type: "sub",
       out,
       in: incoming,
       label: `Sustitución · Sale #${out} → Entra #${incoming}`,
+    });
+    return;
+  }
+  if (cmd === "confirm-libero-change") {
+    const activeLiberoId = Number(value);
+    const oldLibero = player(state.activeLiberoId);
+    const newLibero = player(activeLiberoId);
+    if (!newLibero || newLibero.role !== "Líbero" || activeLiberoId === state.activeLiberoId) return;
+    selectedLiberoId = null;
+    commit({
+      type: "libero-change",
+      activeLiberoId,
+      label: oldLibero
+        ? `Cambio de líbero activo · ${oldLibero.name} → ${newLibero.name}`
+        : `Líbero activo: ${newLibero.name}`,
     });
     return;
   }
@@ -2633,10 +2722,6 @@ document.addEventListener("change", (e) => {
       .map((g) => `<option value="${g}">${e.target.value === "Ataque" && g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
       .join("");
   }
-  if (e.target.matches('#libero-change-form [name="activeLiberoId"]')) {
-    const submit = e.target.form?.querySelector('[type="submit"]');
-    if (submit) submit.disabled = Number(e.target.value) === state.activeLiberoId;
-  }
 });
 document.addEventListener(
   "submit",
@@ -2716,33 +2801,6 @@ document.addEventListener(
   },
   true,
 );
-document.addEventListener("submit", (e) => {
-  if (e.target.id === "libero-change-form") {
-    e.preventDefault();
-    if (state.status !== "playing") return;
-    const activeLiberoId = Number(new FormData(e.target).get("activeLiberoId"));
-    if (activeLiberoId === state.activeLiberoId) return;
-    const oldLibero = player(state.activeLiberoId);
-    const newLibero = player(activeLiberoId);
-    commit({
-      type: "libero-change",
-      activeLiberoId,
-      label: oldLibero
-        ? `Cambio de líbero activo · ${oldLibero.name} → ${newLibero?.name || ""}`
-        : `Líbero activo: ${newLibero?.name || ""}`,
-    });
-    return;
-  }
-  if (e.target.id !== "sub-form") return;
-  e.preventDefault();
-  const data = new FormData(e.target),
-    out = Number(data.get("out")),
-    incoming = Number(data.get("in"));
-  show(
-    "Confirmar sustitución",
-    `<p class="sub-summary">Sale <b>#${out}</b> → Entra <b>#${incoming}</b></p><div class="dialog-actions">${button("Cancelar", "close")}${button("Confirmar cambio", `confirm-sub:${out},${incoming}`, "primary")}</div>`,
-  );
-});
 window.addEventListener("online", render);
 window.addEventListener("offline", render);
 render();
