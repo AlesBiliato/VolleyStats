@@ -156,6 +156,29 @@ function matchHeading() {
 }
 const isActiveLibero = (id) =>
   id === state.activeLiberoId && player(id)?.role === "Líbero";
+function eventChangedScore(event) {
+  return (
+    Array.isArray(event.before) &&
+    Array.isArray(event.after) &&
+    (event.before[0] !== event.after[0] || event.before[1] !== event.after[1])
+  );
+}
+function receptionPending(match) {
+  if (match.status !== "playing" || match.serving) return false;
+  let rallyStart = 0;
+  for (let index = match.events.length - 1; index >= 0; index--) {
+    const event = match.events[index];
+    if (event.type === "next" || eventChangedScore(event)) {
+      rallyStart = index + 1;
+      break;
+    }
+  }
+  return !match.events
+    .slice(rallyStart)
+    .some(
+      (event) => event.type === "action" && event.action === "Recepción",
+    );
+}
 const unforcedReasons = [
   ["rotation", "Falta de rotación"],
   ["net", "Toque de red"],
@@ -356,7 +379,7 @@ function court() {
     })
     .join(
       "",
-    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div>${activeLibero ? `<div class="active-libero"><span class="eyebrow">LÍBERO ACTIVO</span><button type="button" class="active-libero-control ${selected === activeLibero.id ? "selected" : ""}" data-cmd="player:${activeLibero.id}" aria-label="Líbero activo, dorsal ${activeLibero.id}, ${esc(activeLibero.name)}" ${state.status !== "playing" ? "disabled" : ""}><span class="jersey">${activeLibero.id}</span><span class="active-libero-name">${esc(activeLibero.name)}</span>${keyboardKey("L")}</button></div>` : ""}<div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${benchPlayers.length} disponibles</span></div><div class="bench-players">${benchPlayers
+    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div>${activeLibero ? `<div class="active-libero"><span class="eyebrow">LÍBERO ACTIVO</span><button type="button" class="active-libero-control ${selected === activeLibero.id ? "selected" : ""}" data-cmd="player:${activeLibero.id}" aria-label="Líbero activo, dorsal ${activeLibero.id}, ${esc(activeLibero.name)}" ${state.status !== "playing" ? "disabled" : ""}><span class="jersey">${activeLibero.id}</span><span class="active-libero-name">${esc(activeLibero.name)}</span></button></div>` : ""}<div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${benchPlayers.length} disponibles</span></div><div class="bench-players">${benchPlayers
     .map(
       (p) =>
         `<span class="bench-player ${p.role === "Líbero" ? "libero" : ""}" data-player-id="${p.id}"><b>${p.id}</b><span>${esc(p.name)}${p.role === "Líbero" ? " · L" : ""}</span></span>`,
@@ -1391,11 +1414,30 @@ function actionDialog() {
   const p = player(selected);
   if (!p) return;
   const activeLiberoSelected = isActiveLibero(selected);
+  const canReceive = receptionPending(state);
+  const showActionOptions = !activeLiberoSelected && action !== "Recepción";
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${showActionOptions ? `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "", a === "Recepción" && !canReceive)).join("")}</div>` : ""}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
     "action",
   );
+}
+
+function selectMatchPlayer(id) {
+  if (
+    state.status !== "playing" ||
+    (!state.lineup.includes(id) && !isActiveLibero(id))
+  ) return false;
+  clearKeyboardJerseyBuffer();
+  const canReceive = receptionPending(state);
+  if (isActiveLibero(id) && !canReceive) {
+    toast("Recepción no disponible en este momento");
+    return true;
+  }
+  selected = id;
+  action = canReceive ? "Recepción" : null;
+  actionDialog();
+  return true;
 }
 function gradeLabel(actionName, grade) {
   if (grade === "Blo") return "Blq";
@@ -2415,13 +2457,11 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "player") {
-    clearKeyboardJerseyBuffer();
-    selected = Number(value);
-    action = isActiveLibero(selected) ? "Recepción" : null;
-    actionDialog();
+    selectMatchPlayer(Number(value));
     return;
   }
   if (cmd === "action") {
+    if (value === "Recepción" && !receptionPending(state)) return;
     action = value;
     actionDialog();
     return;
@@ -2633,11 +2673,9 @@ function keyboardDigitFromEvent(event) {
 function clickNumberedKeyboardOption(selector, digit) {
   const index = Number(digit) - 1;
   if (index < 0) return false;
-  const options = [...document.querySelectorAll(selector)].filter(
-    (option) => !option.disabled && option.offsetParent !== null,
-  );
+  const options = [...document.querySelectorAll(selector)];
   const option = options[index];
-  if (!option) return false;
+  if (!option || option.disabled || option.offsetParent === null) return false;
   option.click();
   return true;
 }
@@ -2647,7 +2685,7 @@ function confirmKeyboardJersey() {
   const entered = keyboardJerseyBuffer;
   const jersey = Number(entered);
   clearKeyboardJerseyBuffer();
-  if (!state.lineup.includes(jersey)) {
+  if (!state.lineup.includes(jersey) && !isActiveLibero(jersey)) {
     toast(`El dorsal #${entered} no está en pista`);
     return true;
   }
@@ -2731,20 +2769,6 @@ function handleMatchKeyboard(event) {
 
   if (event.key === "Backspace" && keyboardJerseyBuffer) {
     setKeyboardJerseyBuffer(keyboardJerseyBuffer.slice(0, -1));
-    event.preventDefault();
-    return;
-  }
-
-  if (!event.ctrlKey && !event.altKey && !event.metaKey && key === "l") {
-    const activeLibero = player(state.activeLiberoId);
-    if (!activeLibero || activeLibero.role !== "Líbero") {
-      toast("No hay líbero activo");
-    } else {
-      const control = document.querySelector(
-        `.active-libero-control[data-cmd="player:${activeLibero.id}"]`,
-      );
-      control?.click();
-    }
     event.preventDefault();
     return;
   }
