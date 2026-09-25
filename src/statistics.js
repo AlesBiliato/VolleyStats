@@ -1,30 +1,205 @@
-const blank=()=>({actions:0,won:0,lost:0,points:0,errors:0,attack:0,kills:0,attackErrors:0,blocked:0,reception:0,receptionErrors:0,positiveReception:0,excellentReception:0,serve:0,serveErrors:0,aces:0,blockPoints:0,breakPoints:0,positiveActions:0,negativeActions:0,gp:0});
-export const percent=(n,d)=>d?Math.round(n/d*100)+' %':'—';
-export function statistics(state,set='all'){
- const indexed=state.events.map((e,i)=>({e,i})).filter(({e})=>set==='all'||e.set===Number(set));
- const events=indexed.map(({e})=>e);
- const total=blank(),players=state.roster.map(p=>({...p,...blank(),initialPosition:null}));
- const phases=['K1','K2'].map(name=>({name,...blank()})),rotations=Array.from({length:6},(_,i)=>({name:'R'+(i+1),...blank()}));
- let unforced=0,rotationErrors=0,netErrors=0,otherErrors=0,substitutions=0;
- const opening=set==='all'?{before:state.undo[0]}:indexed.find(({e})=>e.type!=='next')&&{before:state.undo[indexed.find(({e})=>e.type!=='next').i]};
- const initialLineup=opening?.before?.lineup||(set==='all'?state.undo[0]?.lineup||state.lineup:undefined);
- if(initialLineup)players.forEach(p=>{const i=initialLineup.indexOf(p.id);if(i>=0)p.initialPosition=i+1;});
- for(const {e} of indexed){
-  if(e.type==='sub')substitutions++;
-  if(!['point','action'].includes(e.type))continue;
-  const won=Math.max(0,e.after[0]-e.before[0]),lost=Math.max(0,e.after[1]-e.before[1]);
-  for(const group of [total,phases.find(p=>p.name===e.phase),rotations[e.rotation-1]].filter(Boolean)){group.won+=won;group.lost+=lost;group.actions+=e.type==='action'?1:0;}
-  if(e.type==='point'&&e.category==='unforced-error'){unforced++;if(e.reason==='rotation')rotationErrors++;if(e.reason==='net')netErrors++;if(e.reason==='other')otherErrors++;}
-  if(e.type!=='action')continue;
-  const p=players.find(p=>p.id===e.player);if(!p)continue;
-  p.actions++;p.points+=won;p.errors+=lost;
-  if(e.phase==='K2'&&won)p.breakPoints++;
-  if(['#','+'].includes(e.grade))p.positiveActions++;else if(['=','Blo','-'].includes(e.grade))p.negativeActions++;
-  p.gp=p.points-p.errors;
-  if(e.action==='Saque'){p.serve++;p.serveErrors+=lost;if(won&&e.grade==='#')p.aces++;}
-  if(e.action==='Bloqueo'&&won)p.blockPoints+=1;
-  if(e.action==='Ataque'){p.attack++;p.kills+=won;p.attackErrors+=e.grade==='='?1:0;if(e.grade==='Blo')p.blocked++;}
-  if(e.action==='Recepción'){p.reception++;p.receptionErrors+=lost;p.positiveReception+=['#','+'].includes(e.grade)?1:0;p.excellentReception+=e.grade==='#'?1:0;}
- }
- return {total,players,phases,rotations,unforced,rotationErrors,netErrors,otherErrors,substitutions};
+const blank = () => ({
+  actions: 0,
+  won: 0,
+  lost: 0,
+  points: 0,
+  errors: 0,
+  attack: 0,
+  kills: 0,
+  attackErrors: 0,
+  blocked: 0,
+  reception: 0,
+  receptionErrors: 0,
+  positiveReception: 0,
+  excellentReception: 0,
+  serve: 0,
+  serveErrors: 0,
+  aces: 0,
+  blockPoints: 0,
+  breakPoints: 0,
+  positiveActions: 0,
+  negativeActions: 0,
+  gp: 0,
+});
+
+export const unforcedReasons = [
+  ["rotation", "Falta de rotación"],
+  ["net", "Toque de red"],
+  ["other", "Otros"],
+];
+
+export const playerStatKeys = [
+  "points",
+  "breakPoints",
+  "gp",
+  "serve",
+  "serveErrors",
+  "aces",
+  "reception",
+  "receptionErrors",
+  "positiveReception",
+  "excellentReception",
+  "attack",
+  "attackErrors",
+  "blocked",
+  "kills",
+  "blockPoints",
+];
+
+export const percent = (numerator, denominator) =>
+  denominator ? `${Math.round((numerator / denominator) * 100)} %` : "—";
+
+export function aggregatePlayerStatistics(players) {
+  return players.reduce((total, player) => {
+    for (const key of playerStatKeys) total[key] += player[key] || 0;
+    return total;
+  }, blank());
+}
+
+export function resolveRosterName(match, rosters = []) {
+  const historicalName =
+    typeof match.rosterName === "string" ? match.rosterName.trim() : "";
+  if (historicalName) return historicalName;
+
+  const matchesRoster = (roster) =>
+    roster.players.length === match.roster.length &&
+    roster.players.every((player) => {
+      const matchPlayer = match.roster.find((item) => item.id === player.id);
+      return (
+        matchPlayer &&
+        matchPlayer.name === player.name &&
+        matchPlayer.role === player.role
+      );
+    });
+  const linkedRoster =
+    typeof match.rosterId === "string"
+      ? rosters.find((roster) => roster.id === match.rosterId)
+      : rosters.find(matchesRoster);
+
+  return linkedRoster?.name.trim() || "Nuestro equipo";
+}
+
+export function statistics(state, set = "all") {
+  const indexed = state.events
+    .map((event, index) => ({ event, index }))
+    .filter(({ event }) => set === "all" || event.set === Number(set));
+  const total = blank();
+  const players = state.roster.map((player) => ({
+    ...player,
+    ...blank(),
+    initialPosition: null,
+  }));
+  const phases = ["K1", "K2"].map((name) => ({ name, ...blank() }));
+  const rotations = Array.from({ length: 6 }, (_, index) => ({
+    name: `R${index + 1}`,
+    ...blank(),
+  }));
+  const unforcedByReason = new Map(
+    unforcedReasons.map(([reason, label]) => [reason, { reason, label, count: 0 }]),
+  );
+  const rivalErrors = { serve: 0, attack: 0 };
+  let unforced = 0;
+  let substitutions = 0;
+  const firstPeriodEvent = indexed.find(({ event }) => event.type !== "next");
+  const opening =
+    set === "all"
+      ? { before: state.undo[0] }
+      : firstPeriodEvent && { before: state.undo[firstPeriodEvent.index] };
+  const initialLineup =
+    opening?.before?.lineup ||
+    (set === "all" ? state.undo[0]?.lineup || state.lineup : undefined);
+
+  if (initialLineup) {
+    players.forEach((player) => {
+      const index = initialLineup.indexOf(player.id);
+      if (index >= 0) player.initialPosition = index + 1;
+    });
+  }
+
+  for (const { event } of indexed) {
+    if (event.type === "sub") substitutions++;
+    if (!["point", "action"].includes(event.type)) continue;
+
+    const won = Math.max(0, event.after[0] - event.before[0]);
+    const lost = Math.max(0, event.after[1] - event.before[1]);
+
+    for (const group of [
+      total,
+      phases.find((phase) => phase.name === event.phase),
+      rotations[event.rotation - 1],
+    ].filter(Boolean)) {
+      group.won += won;
+      group.lost += lost;
+      group.actions += event.type === "action" ? 1 : 0;
+    }
+
+    if (event.type === "point" && event.category === "unforced-error") {
+      unforced++;
+      const known = unforcedByReason.get(event.reason);
+      if (known) {
+        known.count++;
+      } else {
+        unforcedByReason.set(event.reason || "unknown", {
+          reason: event.reason || "unknown",
+          label: event.reason || "Sin motivo",
+          count: 1,
+        });
+      }
+    }
+
+    if (event.type === "point" && event.team === 0) {
+      if (/error de saque rival/i.test(event.label)) rivalErrors.serve++;
+      if (/error de ataque rival/i.test(event.label)) rivalErrors.attack++;
+    }
+
+    if (event.type !== "action") continue;
+    const player = players.find((candidate) => candidate.id === event.player);
+    if (!player) continue;
+
+    player.actions++;
+    player.points += won;
+    player.errors += lost;
+    if (event.phase === "K2" && won) player.breakPoints++;
+    if (["#", "+"].includes(event.grade)) player.positiveActions++;
+    else if (["=", "Blo", "-"].includes(event.grade)) player.negativeActions++;
+    player.gp = player.points - player.errors;
+
+    if (event.action === "Saque") {
+      player.serve++;
+      player.serveErrors += lost;
+      if (won && event.grade === "#") player.aces++;
+    }
+    if (event.action === "Bloqueo" && won) player.blockPoints++;
+    if (event.action === "Ataque") {
+      player.attack++;
+      player.kills += won;
+      player.attackErrors += event.grade === "=" ? 1 : 0;
+      if (event.grade === "Blo") player.blocked++;
+    }
+    if (event.action === "Recepción") {
+      player.reception++;
+      player.receptionErrors += lost;
+      player.positiveReception += ["#", "+"].includes(event.grade) ? 1 : 0;
+      player.excellentReception += event.grade === "#" ? 1 : 0;
+    }
+  }
+
+  const unforcedReasonTotals = [...unforcedByReason.values()];
+
+  return {
+    total,
+    players,
+    phases,
+    rotations,
+    rivalErrors,
+    unforced,
+    unforcedReasons: unforcedReasonTotals,
+    rotationErrors:
+      unforcedReasonTotals.find(({ reason }) => reason === "rotation")?.count || 0,
+    netErrors:
+      unforcedReasonTotals.find(({ reason }) => reason === "net")?.count || 0,
+    otherErrors:
+      unforcedReasonTotals.find(({ reason }) => reason === "other")?.count || 0,
+    substitutions,
+  };
 }

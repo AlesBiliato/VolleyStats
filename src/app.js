@@ -1,5 +1,11 @@
 import { correctEvent, grades } from "./corrections.js";
-import { statistics, percent } from "./statistics.js";
+import {
+  aggregatePlayerStatistics,
+  percent,
+  resolveRosterName,
+  statistics,
+  unforcedReasons,
+} from "./statistics.js";
 
 import { initial, transition, createMatch } from "./domain.js";
 import { loadMatch, saveMatch, loadRoster, saveRoster, loadRosters, saveRosters, loadArchives, replaceMatch } from "./storage.js";
@@ -127,25 +133,8 @@ const esc = (s) =>
       ],
   );
 const player = (id) => state.roster.find((p) => p.id === id);
-function rosterMatchesMatch(roster, match) {
-  return roster.players.length === match.roster.length &&
-    roster.players.every((player) => {
-      const matchPlayer = match.roster.find((item) => item.id === player.id);
-      return matchPlayer &&
-        matchPlayer.name === player.name &&
-        matchPlayer.role === player.role;
-    });
-}
 function rosterNameForMatch(match) {
-  const historicalName =
-    typeof match.rosterName === "string" ? match.rosterName.trim() : "";
-  if (historicalName) return historicalName;
-
-  const linkedRoster =
-    typeof match.rosterId === "string"
-      ? savedRosters.find((roster) => roster.id === match.rosterId)
-      : savedRosters.find((roster) => rosterMatchesMatch(roster, match));
-  return linkedRoster?.name.trim() || "Nuestro equipo";
+  return resolveRosterName(match, savedRosters);
 }
 function matchHeading() {
   const ours = esc(rosterNameForMatch(state));
@@ -179,11 +168,6 @@ function receptionPending(match) {
       (event) => event.type === "action" && event.action === "Recepción",
     );
 }
-const unforcedReasons = [
-  ["rotation", "Falta de rotación"],
-  ["net", "Toque de red"],
-  ["other", "Otros"],
-];
 const keyboardErrorOptions = [
   ["serve-error", "Error saque rival"],
   ["attack-error", "Error ataque rival"],
@@ -237,6 +221,15 @@ function toast(s) {
       setTimeout(() => el.remove(), 220);
     }
   }, 2600);
+}
+async function downloadMatchReport(match) {
+  try {
+    const { generateMatchPdf } = await import("./pdf-report.js");
+    await generateMatchPdf(match, { teamName: rosterNameForMatch(match) });
+  } catch (error) {
+    console.error("No se pudo generar el PDF", error);
+    toast("No se pudo generar el PDF");
+  }
 }
 function persist(next, message) {
   try {
@@ -358,7 +351,11 @@ function score() {
     state.status === "finished"
       ? ""
       : button("Finalizar partido", "finish-match", "finish-match");
-  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button(`<b>+1</b> Rival${keyboardKey("0")}`, "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors error-tools">${button("No forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}${button(`<span>Todos los errores</span>${keyboardKey("E")}`, "keyboard-errors", "keyboard-errors-trigger", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
+  const reportAction =
+    state.status === "finished"
+      ? button("Generar PDF", "generate-pdf", "generate-pdf")
+      : "";
+  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button(`<b>+1</b> Rival${keyboardKey("0")}`, "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors error-tools">${button("No forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}${button(`<span>Todos los errores</span>${keyboardKey("E")}`, "keyboard-errors", "keyboard-errors-trigger", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction || reportAction ? "open" : ""}">${setAction}${finishMatchAction}${reportAction}</div></aside>`;
 }
 function court() {
   const activeLibero = state.activeLiberoId == null
@@ -1372,7 +1369,10 @@ function render() {
             `
             : `
               <section class="wide-card">
-                <h2>${state.demo ? "Partido de ejemplo guardado" : "Partido actual"}</h2>
+                <div class="history-page-heading">
+                  <h2>${state.demo ? "Partido de ejemplo guardado" : "Partido actual"}</h2>
+                  ${state.status === "finished" ? button("Generar PDF", "generate-pdf", "primary generate-pdf") : ""}
+                </div>
                 <p>
                   Edita o elimina registros. Los marcadores y las estadísticas
                   se recalculan al guardar.
@@ -1380,6 +1380,7 @@ function render() {
 
                 ${historyRows(true)}
               </section>
+              ${archiveReportSection()}
             `
       }
 
@@ -1394,6 +1395,23 @@ function render() {
       </footer>
     </main>
   `;
+}
+function archiveReportSection() {
+  let archives;
+  try {
+    archives = loadArchives().filter((match) => match.status === "finished");
+  } catch (error) {
+    return `<section class="wide-card archive-reports"><h2>Partidos anteriores</h2><p role="alert">${esc(error.message)}</p></section>`;
+  }
+  if (!archives.length) return "";
+
+  return `<section class="wide-card archive-reports"><h2>Partidos anteriores</h2><p>Informes disponibles para los partidos finalizados guardados en este dispositivo.</p><div class="archive-report-list">${[...archives]
+    .reverse()
+    .map(
+      (match) =>
+        `<article><div><strong>${esc(resolveRosterName(match, savedRosters))} vs ${esc(match.rival || "Rival")}</strong><small>${esc(match.date || "Sin fecha")} · ${esc(match.venue || "Sede no indicada")}</small></div>${button("Generar PDF", `generate-pdf-archive:${match.id}`, "generate-pdf")}</article>`,
+    )
+    .join("")}</div></section>`;
 }
 function historyRows(all = false) {
   const events = all ? state.events : state.events.slice(-5);
@@ -1945,6 +1963,20 @@ document.addEventListener("click", (e) => {
     catch (error) { toast(error.message); }
     return;
   }
+  if (cmd === "generate-pdf") {
+    if (state.status === "finished") void downloadMatchReport(state);
+    return;
+  }
+  if (cmd === "generate-pdf-archive") {
+    try {
+      const archived = loadArchives().find((match) => match.id === value);
+      if (archived?.status === "finished") void downloadMatchReport(archived);
+    } catch (error) {
+      console.error("No se pudo generar el PDF", error);
+      toast("No se pudo generar el PDF");
+    }
+    return;
+  }
   if (cmd === "close") {
     modal.close();
     return;
@@ -2479,13 +2511,17 @@ document.addEventListener("click", (e) => {
   if (cmd === "history") {
     show(
       "Corrección / Historial",
-      `<p class="history-intro">Últimas 5 operaciones. Edita un registro para corregirlo o eliminarlo.</p>${historyRows()}${button("Ver todas las operaciones", "all-history", "full history-more")}`,
+      `${state.status === "finished" ? `<div class="history-report-action">${button("Generar PDF", "generate-pdf", "primary generate-pdf")}</div>` : ""}<p class="history-intro">Últimas 5 operaciones. Edita un registro para corregirlo o eliminarlo.</p>${historyRows()}${button("Ver todas las operaciones", "all-history", "full history-more")}`,
       "history",
     );
     return;
   }
   if (cmd === "all-history") {
-    show("Todas las operaciones", historyRows(true), "history");
+    show(
+      "Todas las operaciones",
+      `${state.status === "finished" ? `<div class="history-report-action">${button("Generar PDF", "generate-pdf", "primary generate-pdf")}</div>` : ""}${historyRows(true)}`,
+      "history",
+    );
     return;
   }
   if (cmd === "undo") {
@@ -2803,12 +2839,12 @@ function statsBody(tab) {
     return `<div class="stat-cards"><div><b>${s.total.won} – ${s.total.lost}</b><span>Puntos registrados</span></div><div><b>${s.total.actions}</b><span>Acciones de jugadores</span></div></div>${table(
       ["Concepto", "Total"],
       [
+        ["Errores de saque rival", s.rivalErrors.serve],
+        ["Errores de ataque rival", s.rivalErrors.attack],
         ["Errores nuestros no forzados", s.unforced],
-        ["Faltas de rotación", s.rotationErrors],
-        ["Toques de red", s.netErrors],
-        ["Otros", s.otherErrors],
+        ...s.unforcedReasons.map((reason) => [reason.label, reason.count]),
       ],
-      ["Total", s.unforced],
+      ["Total no forzados", s.unforced],
     )}<p class="muted">Solo se cuentan los registros del periodo seleccionado. Los puntos manuales no se atribuyen a un jugador.</p>`;
   if (tab === "General") {
     const groups = [
@@ -2819,27 +2855,7 @@ function statsBody(tab) {
       ["Bloqueo", ["Puntos"]],
     ];
     const empty = (n) => n || "·";
-    const pointTotals = s.players.reduce((total, p) => {
-      for (const key of [
-        "points",
-        "breakPoints",
-        "gp",
-        "serve",
-        "serveErrors",
-        "aces",
-        "reception",
-        "receptionErrors",
-        "positiveReception",
-        "excellentReception",
-        "attack",
-        "attackErrors",
-        "blocked",
-        "kills",
-        "blockPoints",
-      ])
-        total[key] = (total[key] || 0) + p[key];
-      return total;
-    }, {});
+    const pointTotals = aggregatePlayerStatistics(s.players);
     const renderValues = (p) => [
       [p.points, p.breakPoints, p.gp],
       [p.serve, p.serveErrors, p.aces],

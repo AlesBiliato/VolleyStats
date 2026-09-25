@@ -630,6 +630,54 @@ h1 > span {
   color: #8a3e32;
   font-size: 11px;
 }
+.generate-pdf {
+  border-color: #0b5343;
+  background: #0b5343;
+  color: #fff;
+  font-weight: 700;
+}
+.generate-pdf:hover {
+  background: #073f33;
+}
+.history-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.history-page-heading h2 {
+  margin: 0;
+}
+.history-report-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.archive-reports {
+  margin-top: 18px;
+}
+.archive-report-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.archive-report-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #dfe7df;
+  border-radius: 10px;
+  background: #f8faf7;
+}
+.archive-report-list article div {
+  display: grid;
+  gap: 4px;
+}
+.archive-report-list small {
+  color: #6b795f;
+}
 .danger {
   border-color: #9b3f32;
   background: #9b3f32;
@@ -2575,7 +2623,8 @@ dialog.stats-dialog {
 }
 
 #app .match-end-actions .finish,
-#app .match-end-actions .finish-match {
+#app .match-end-actions .finish-match,
+#app .match-end-actions .generate-pdf {
   min-height: clamp(48px, 6.5dvh, 54px);
   padding: clamp(9px, 1.3dvh, 12px) clamp(8px, 1vw, 14px);
   font-size: clamp(12px, 0.95vw, 13px);
@@ -2645,7 +2694,8 @@ dialog.stats-dialog {
   }
 
   #app .match-end-actions .finish,
-  #app .match-end-actions .finish-match {
+  #app .match-end-actions .finish-match,
+  #app .match-end-actions .generate-pdf {
     min-height: 44px;
     padding-block: 5px;
     font-size: 11px;
@@ -2655,6 +2705,14 @@ dialog.stats-dialog {
   #app .toolbar button {
     min-height: 50px;
     padding-block: 7px;
+  }
+}
+
+@media (max-width: 650px) {
+  .history-page-heading,
+  .archive-report-list article {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

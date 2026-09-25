@@ -512,6 +512,54 @@ try{
   await tap('history');assert.match(await page.locator('#modal').innerText(),/Partido finalizado/);await tap('close');await page.reload();await page.locator('.court').waitFor();finished=await state();equal(finished.status,'finished');assert.match(await page.locator('.score-top').innerText(),/PARTIDO FINALIZADO/);
   await undo();equal(await state(),before);
  });
+ await check('Informe PDF solo al finalizar, descarga, historial y regeneración',async()=>{
+  await reset();
+  assert.equal(await page.locator('[data-cmd="generate-pdf"]').count(),0);
+
+  const between=transition(transition(initial(),{type:'point',team:0,label:'Punto nuestro'}),{type:'finish',label:'Set 1 finalizado'});
+  await reset(between);
+  assert.equal(await page.locator('[data-cmd="generate-pdf"]').count(),0);
+
+  let finished=initial();
+  Object.assign(finished,{rosterId:'test-roster',rosterName:'Vóley Ciutadella',rival:'Peña Übeda',competition:'Liga sénior',date:'2026-10-11',time:'18:30',venue:'Local'});
+  finished=transition(finished,{type:'action',player:7,action:'Ataque',grade:'#',label:'#7 · Ataque #'});
+  finished=transition(finished,{type:'finish-match',label:'Partido finalizado'});
+  await reset(finished,'Nombre actual distinto');
+  assert.equal(await page.locator('.score-panel [data-cmd="generate-pdf"]').count(),1);
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const layout=await page.locator('.score-panel [data-cmd="generate-pdf"]').evaluate(button=>{const box=button.getBoundingClientRect();return {visible:box.width>0&&box.height>=47.5,inside:box.left>=0&&box.right<=innerWidth+1&&box.top>=0&&box.bottom<=innerHeight+1,horizontalOverflow:document.documentElement.scrollWidth>innerWidth};});
+   equal(layout,{visible:true,inside:true,horizontalOverflow:false});
+  }
+
+  const downloadPromise=page.waitForEvent('download');
+  await tap('generate-pdf');
+  const download=await downloadPromise;
+  assert.match(download.suggestedFilename(),/^VolleyStats_.+_vs_.+_2026-10-11\.pdf$/);
+  const downloadedPath=await download.path();
+  const bytes=await readFile(downloadedPath);
+  assert(bytes.length>1000);
+  assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
+
+  await tap('history');
+  assert.equal(await page.locator('#modal [data-cmd="generate-pdf"]').count(),1);
+  const beforeReport=await page.evaluate(async()=>{const {buildMatchReport}=await import('/src/report.js');const match=JSON.parse(localStorage.getItem('volleystats.match.v1'));return buildMatchReport(match,{teamName:'Vóley Ciutadella'}).periods[0].general.rows.find(player=>player.id===7).metrics;});
+  await tap('edit-event:0');
+  await page.selectOption('#edit-grade','Blo');
+  await page.locator('#edit-form button[type="submit"]').click();
+  await tap('confirm-correction');
+  const afterReport=await page.evaluate(async()=>{const {buildMatchReport}=await import('/src/report.js');const match=JSON.parse(localStorage.getItem('volleystats.match.v1'));return buildMatchReport(match,{teamName:'Vóley Ciutadella'}).periods[0].general.rows.find(player=>player.id===7).metrics;});
+  assert.equal(beforeReport.points,1);
+  assert.equal(beforeReport.blocked,0);
+  assert.equal(afterReport.points,0);
+  assert.equal(afterReport.blocked,1);
+
+  const archived=structuredClone(await state());
+  archived.id='archived-finished-report';
+  await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
+  await tap('nav:history');
+  assert.equal(await page.locator('[data-cmd="generate-pdf-archive:archived-finished-report"]').count(),1);
+ });
  await check('Finalizar partido entre sets conserva el set cerrado y permite deshacer',async()=>{
   await reset();await commit('ours');await tap('finish');await commit('confirm-finish');const between=await state();equal(between.status,'between');equal(between.finishedSets,[{set:1,score:[1,0]}]);assert.equal(await page.locator('[data-cmd="next"]').count(),1);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),1);
   await tap('finish-match');assert.match(await page.locator('#modal').innerText(),/no se preparará otro set/);await commit('confirm-finish-match');const finished=await state();equal(finished.status,'finished');equal(finished.finishedSets,between.finishedSets);assert.equal(await page.locator('[data-cmd="next"]').count(),0);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),0);
