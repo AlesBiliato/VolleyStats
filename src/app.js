@@ -263,6 +263,15 @@ function show(title, body, context = "") {
   modal.classList.toggle("substitution-dialog", title === "Sustitución");
   modal.classList.toggle("action-dialog", context === "action");
   modal.classList.toggle("keyboard-errors-dialog", context === "errors");
+  modal.classList.toggle("history-dialog", context === "history");
+  modal.classList.toggle(
+    "correction-dialog",
+    context === "correction" || context === "correction-preview",
+  );
+  modal.classList.toggle(
+    "correction-preview-dialog",
+    context === "correction-preview",
+  );
   modal.dataset.context = context;
   modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYSTATS</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
   if (!modal.open) modal.showModal();
@@ -1366,13 +1375,13 @@ function render() {
 function historyRows(all = false) {
   const events = all ? state.events : state.events.slice(-5);
   return (
-    `${state.correctionUndo ? button("Deshacer última corrección", "undo-correction", "full") : ""}` +
+    `${state.correctionUndo ? button("Deshacer última corrección", "undo-correction", "full history-undo") : ""}` +
     (events.length
       ? `<div class="history-list">${[...events]
           .reverse()
           .map(
             (e) =>
-              `<article><strong>${e.after.join(" – ")}</strong><div>${esc(e.label)}<small>Set ${e.set} · ${e.phase} · R${e.rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "libero-change", "next"].includes(e.type) ? button("Editar", "edit-event:" + state.events.indexOf(e), "edit-event") : "<small>Resultado recalculado</small>"}</article>`,
+              `<article class="history-entry"><strong class="history-score">${e.after.join(" – ")}</strong><div class="history-copy"><span class="history-label">${esc(e.label)}</span><small>Set ${e.set} · ${e.phase} · R${e.rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "libero-change", "next"].includes(e.type) ? button("Editar", "edit-event:" + state.events.indexOf(e), "edit-event") : '<small class="history-recalculated">Resultado recalculado</small>'}</article>`,
           )
           .join("")}</div>`
       : `<div class="empty">Todavía no hay operaciones.<p>Los puntos y las acciones que registres aparecerán aquí.</p></div>`)
@@ -2430,12 +2439,13 @@ document.addEventListener("click", (e) => {
   if (cmd === "history") {
     show(
       "Corrección / Historial",
-      `<p>Últimas 5 operaciones. Edita un registro para corregirlo o eliminarlo.</p>${historyRows()}${button("Ver todas las operaciones", "all-history", "full")}`,
+      `<p class="history-intro">Últimas 5 operaciones. Edita un registro para corregirlo o eliminarlo.</p>${historyRows()}${button("Ver todas las operaciones", "all-history", "full history-more")}`,
+      "history",
     );
     return;
   }
   if (cmd === "all-history") {
-    show("Todas las operaciones", historyRows(true));
+    show("Todas las operaciones", historyRows(true), "history");
     return;
   }
   if (cmd === "undo") {
@@ -2893,6 +2903,8 @@ function editEvent(index) {
       )
       .join("");
   const players = (ids) => ids.map((id) => [id, `#${id} · ${player(id).name}`]);
+  const field = (label, name, content, id = "") =>
+    `<label class="correction-field"><span>${label}</span><select class="form-select" name="${name}"${id ? ` id="${id}"` : ""}>${content}</select></label>`;
   let fields = "";
   if (e.type === "point") {
     const kind =
@@ -2905,31 +2917,75 @@ function editEvent(index) {
             : e.team === 0
               ? "ours"
               : "theirs";
-    fields = `<label>Resultado<select name="kind">${options(pointOptions, kind)}</select></label>`;
+    fields = field("Resultado", "kind", options(pointOptions, kind));
   }
   if (e.type === "action")
-    fields = `<label>Jugador<select name="player">${options(players(before.lineup), e.player)}</select></label><label>Acción<select name="action" id="edit-action">${options(
-      Object.keys(grades).map((a) => [a, a]),
-      e.action,
-    )}</select></label><label>Valoración<select name="grade" id="edit-grade">${options(
-      grades[e.action].map((g) => [g, gradeLabel(e.action, g)]),
-      editableGrade(e.action, e.grade),
-    )}</select></label>`;
+    fields =
+      field("Jugador", "player", options(players(before.lineup), e.player)) +
+      field(
+        "Acción",
+        "action",
+        options(
+          Object.keys(grades).map((a) => [a, a]),
+          e.action,
+        ),
+        "edit-action",
+      ) +
+      field(
+        "Valoración",
+        "grade",
+        options(
+          grades[e.action].map((g) => [g, gradeLabel(e.action, g)]),
+          editableGrade(e.action, e.grade),
+        ),
+        "edit-grade",
+      );
   if (e.type === "sub")
-    fields = `<label>Sale<select name="out">${options(players(before.lineup), e.out)}</select></label><label>Entra<select name="in">${options(players(state.roster.filter((p) => !before.lineup.includes(p.id) && p.role !== "Líbero").map((p) => p.id)), e.in)}</select></label>`;
+    fields =
+      field("Sale", "out", options(players(before.lineup), e.out)) +
+      field(
+        "Entra",
+        "in",
+        options(
+          players(
+            state.roster
+              .filter(
+                (p) => !before.lineup.includes(p.id) && p.role !== "Líbero",
+              )
+              .map((p) => p.id),
+          ),
+          e.in,
+        ),
+      );
   if (e.type === "libero-change")
-    fields = `<label>Líbero activo<select name="activeLiberoId">${options(players(state.roster.filter((p) => p.role === "Líbero").map((p) => p.id)), e.activeLiberoId)}</select></label>`;
+    fields = field(
+      "Líbero activo",
+      "activeLiberoId",
+      options(
+        players(
+          state.roster
+            .filter((p) => p.role === "Líbero")
+            .map((p) => p.id),
+        ),
+        e.activeLiberoId,
+      ),
+    );
   if (e.type === "next")
-    fields = `<label>Saque inicial<select name="serving">${options(
-      [
-        ["ours", "Sacamos nosotros"],
-        ["theirs", "Saca el rival"],
-      ],
-      e.serving ? "ours" : "theirs",
-    )}</select></label>`;
+    fields = field(
+      "Saque inicial",
+      "serving",
+      options(
+        [
+          ["ours", "Sacamos nosotros"],
+          ["theirs", "Saca el rival"],
+        ],
+        e.serving ? "ours" : "theirs",
+      ),
+    );
   show(
     "Corregir registro",
-    `<p>Set ${e.set} · ${esc(e.label)}</p><form id="edit-form" data-index="${index}">${fields}<button class="primary full" type="submit">Revisar corrección</button></form>${e.type !== "next" ? button("Eliminar este registro", "delete-event:" + index, "full") : ""}`,
+    `<div class="correction-current"><span class="eyebrow">OPERACIÓN SELECCIONADA</span><strong>Set ${e.set}</strong><span>${esc(e.label)}</span></div><form id="edit-form" data-index="${index}"><div class="correction-fields">${fields}</div><div class="correction-actions">${button("Cancelar", "close", "correction-cancel")}<button class="primary" type="submit">Revisar corrección</button></div></form>${e.type !== "next" ? `<div class="correction-delete">${button("Eliminar este registro", "delete-event:" + index, "correction-delete-button")}</div>` : ""}`,
+    "correction",
   );
 }
 function previewCorrection(index, command) {
@@ -2942,7 +2998,8 @@ function previewCorrection(index, command) {
   }
   show(
     "Revisar corrección",
-    `<p>${command ? "Se modificará" : "Se eliminará"}: ${esc(state.events[index].label)}</p>${command ? `<p>Nuevo registro: <b>${esc(command.label)}</b></p>` : ""}<p>Marcador actual: <b>${state.score.join(" – ")}</b> → <b>${pendingCorrection.score.join(" – ")}</b><br>Rotación: R${state.rotation} → R${pendingCorrection.rotation}<br>Saque: ${pendingCorrection.serving ? "nosotros" : "rival"}</p><p>Sets cerrados: ${pendingCorrection.finishedSets.map((s) => `Set ${s.set}: ${s.score.join("–")}`).join(" · ") || "ninguno"}.</p><p>Se recalcularán las operaciones posteriores y las estadísticas. Puedes deshacer esta corrección hasta registrar otra operación.</p><div class="dialog-actions">${button("Cancelar", "close")}${button("Guardar corrección", "confirm-correction", "primary")}</div>`,
+    `<div class="correction-preview-operation"><span class="eyebrow">OPERACIÓN ${command ? "MODIFICADA" : "ELIMINADA"}</span><strong>${esc(state.events[index].label)}</strong>${command ? `<span>Nuevo registro: <b>${esc(command.label)}</b></span>` : ""}</div><div class="correction-preview-summary"><div><span>Marcador</span><strong>${state.score.join(" – ")} → ${pendingCorrection.score.join(" – ")}</strong></div><div><span>Rotación</span><strong>R${state.rotation} → R${pendingCorrection.rotation}</strong></div><div><span>Saque</span><strong>${pendingCorrection.serving ? "Nosotros" : "Rival"}</strong></div></div><p>Sets cerrados: ${pendingCorrection.finishedSets.map((s) => `Set ${s.set}: ${s.score.join("–")}`).join(" · ") || "ninguno"}.</p><p class="correction-preview-note">Se recalcularán las operaciones posteriores y las estadísticas. Puedes deshacer esta corrección hasta registrar otra operación.</p><div class="dialog-actions correction-preview-actions">${button("Cancelar", "close")}${button("Guardar corrección", "confirm-correction", "primary")}</div>`,
+    "correction-preview",
   );
 }
 document.addEventListener("change", (e) => {
