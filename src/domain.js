@@ -61,7 +61,7 @@ export function transition(previous, command) {
     command.type === "next" && state.status === "between";
   const canRecordPlayingCommand =
     state.status === "playing" &&
-    ["point", "action", "sub", "finish"].includes(command.type);
+    ["point", "action", "sub", "libero-change", "finish"].includes(command.type);
   if (!canFinishMatch && !canStartNextSet && !canRecordPlayingCommand)
     return previous;
   let label = command.label || command.type;
@@ -90,6 +90,16 @@ export function transition(previous, command) {
     const index = state.lineup.indexOf(command.out);
     if (index < 0 || state.lineup.includes(command.in)) return previous;
     state.lineup[index] = command.in;
+  } else if (command.type === "libero-change") {
+    if (
+      command.activeLiberoId === state.activeLiberoId ||
+      !Number.isInteger(command.activeLiberoId) ||
+      !state.roster.some(
+        (player) =>
+          player.id === command.activeLiberoId && player.role === "Líbero",
+      )
+    ) return previous;
+    state.activeLiberoId = command.activeLiberoId;
   } else if (command.type === "finish") {
     state.finishedSets.push({ set: state.set, score: [...state.score] });
     state.status = "between";

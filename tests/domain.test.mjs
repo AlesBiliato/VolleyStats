@@ -9,6 +9,17 @@ test('Errores no forzados ceden punto y saque sin rotar, y se deshacen completos
 });
 test('Recuperar saque rota una vez y deshacer restaura la operación completa',()=>{const s=initial();const n=transition(s,{type:'point',team:0,label:'Punto'});assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,2);assert.deepEqual(n.lineup,[9,12,7,8,15,4]);const more=transition(n,{type:'point',team:0});assert.equal(more.rotation,2);assert.deepEqual(transition(n,{type:'undo'}),s);});
 test('Sustitución conserva zona y marcador, y se revierte',()=>{const s=initial();const n=transition(s,{type:'sub',out:4,in:6});assert.equal(n.lineup[0],6);assert.deepEqual(n.score,[0,0]);assert.deepEqual(transition(n,{type:'undo'}),s);});
+test('Cambiar el líbero activo solo altera el líbero y se puede deshacer',()=>{
+ const s=initial();s.roster.push({id:17,name:'Segundo líbero',role:'Líbero'});s.activeLiberoId=1;s.setStarts[0].activeLiberoId=1;
+ const unchanged={lineup:structuredClone(s.lineup),score:structuredClone(s.score),rotation:s.rotation,serving:s.serving,set:s.set,finishedSets:structuredClone(s.finishedSets),setStarts:structuredClone(s.setStarts)};
+ const n=transition(s,{type:'libero-change',activeLiberoId:17,label:'Cambio de líbero activo · Nico → Segundo líbero'});
+ assert.equal(n.activeLiberoId,17);assert.deepEqual({lineup:n.lineup,score:n.score,rotation:n.rotation,serving:n.serving,set:n.set,finishedSets:n.finishedSets,setStarts:n.setStarts},unchanged);assert.equal(n.events.at(-1).type,'libero-change');assert.deepEqual(transition(n,{type:'undo'}),s);
+});
+test('El cambio de líbero rechaza roles no válidos, IDs inexistentes, redundancias y estados cerrados',()=>{
+ const s=initial();s.roster.push({id:17,name:'Segundo líbero',role:'Líbero'});s.activeLiberoId=1;s.setStarts[0].activeLiberoId=1;
+ for(const activeLiberoId of [7,12,4,999,1])assert.equal(transition(s,{type:'libero-change',activeLiberoId}),s);
+ for(const status of ['between','finished']){const closed=structuredClone(s);closed.status=status;assert.equal(transition(closed,{type:'libero-change',activeLiberoId:17}),closed);}
+});
 test('Recepción perfecta no suma, ataque punto sí y error suma rival',()=>{let s=transition(initial(),{type:'action',action:'Recepción',grade:'#'});assert.deepEqual(s.score,[0,0]);s=transition(s,{type:'action',action:'Ataque',grade:'#'});assert.deepEqual(s.score,[1,0]);s=transition(s,{type:'action',action:'Saque',grade:'='});assert.deepEqual(s.score,[1,1]);assert.equal(s.serving,false);});
 test('Ataque negativo continúa la jugada sin punto, saque ni rotación',()=>{
   for(const serving of [true,false]){

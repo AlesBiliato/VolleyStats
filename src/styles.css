@@ -891,6 +891,14 @@ select {
   text-align: center;
   padding: 25px;
 }
+.libero-change-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.libero-change-section form label {
+  margin-top: 12px;
+}
 .stats-tabs {
   display: flex;
   gap: 9px;

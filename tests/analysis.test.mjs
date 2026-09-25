@@ -15,6 +15,14 @@ test('Eliminar la única operación permite volver al comienzo y restaurar',()=>
 test('Una corrección incompatible con acciones posteriores se rechaza',()=>{
  const s=play([{type:'sub',out:4,in:6,label:'Cambio'},{type:'action',player:6,action:'Saque',grade:'#',label:'Saque'}]);assert.throws(()=>correctEvent(s,0,null),/jugadores/);assert.deepEqual(s.lineup,[9,12,7,8,15,6]);
 });
+test('Las correcciones reproducen y permiten editar el cambio de líbero activo',()=>{
+ let base=initial();base.roster.push({id:17,name:'Segundo líbero',role:'Líbero'},{id:18,name:'Tercer líbero',role:'Líbero'});base.activeLiberoId=1;base.setStarts[0].activeLiberoId=1;
+ let s=[{type:'action',player:7,action:'Recepción',grade:'+',label:'Recepción +'}, {type:'libero-change',activeLiberoId:17,label:'Cambio de líbero activo · Nico → Segundo líbero'}, {type:'action',player:17,action:'Recepción',grade:'+',label:'Recepción líbero +'}, {type:'finish-match',label:'Partido finalizado'}].reduce(transition,base);
+ const replayed=correctEvent(s,0,{type:'action',player:8,action:'Recepción',grade:'+',label:'Recepción corregida'});assert.equal(replayed.activeLiberoId,17);assert.equal(replayed.status,'finished');assert.equal(replayed.events[1].type,'libero-change');assert.equal(replayed.events[2].player,17);
+ assert.throws(()=>correctEvent(s,1,{type:'libero-change',activeLiberoId:18,label:'Cambio de líbero activo · Nico → Tercer líbero'}),/jugadores/);
+ s=[{type:'libero-change',activeLiberoId:17,label:'Cambio de líbero activo · Nico → Segundo líbero'}, {type:'action',player:7,action:'Recepción',grade:'+',label:'Recepción +'}].reduce(transition,base);
+ const edited=correctEvent(s,0,{type:'libero-change',activeLiberoId:18,label:'Cambio de líbero activo · Nico → Tercer líbero'});assert.equal(edited.activeLiberoId,18);assert.equal(edited.events[0].activeLiberoId,18);assert.throws(()=>correctEvent(s,0,{type:'libero-change',activeLiberoId:7,label:'Inválido'}),/líbero/);
+});
 test('Las correcciones reproducen el cierre de partido sin permitir editarlo ni eliminarlo',()=>{
  const s=play([point(0),{type:'action',player:7,action:'Recepción',grade:'+',label:'Recepción +'}, {type:'finish-match',label:'Partido finalizado'}]);
  const n=correctEvent(s,0,point(1));assert.equal(n.status,'finished');assert.equal(n.events.at(-1).type,'finish-match');assert.equal(n.events.at(-1).label,'Partido finalizado');assert.deepEqual(n.score,[0,1]);assert.throws(()=>correctEvent(s,2,null),/cierres/);assert.throws(()=>correctEvent(s,2,{type:'finish-match',label:'Otro cierre'}),/cierres/);

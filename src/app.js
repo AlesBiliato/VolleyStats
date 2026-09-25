@@ -1275,7 +1275,7 @@ function historyRows(all = false) {
           .reverse()
           .map(
             (e) =>
-              `<article><strong>${e.after.join(" – ")}</strong><div>${esc(e.label)}<small>Set ${e.set} · ${e.phase} · R${e.rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "next"].includes(e.type) ? button("Editar", "edit-event:" + state.events.indexOf(e), "edit-event") : "<small>Resultado recalculado</small>"}</article>`,
+              `<article><strong>${e.after.join(" – ")}</strong><div>${esc(e.label)}<small>Set ${e.set} · ${e.phase} · R${e.rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "libero-change", "next"].includes(e.type) ? button("Editar", "edit-event:" + state.events.indexOf(e), "edit-event") : "<small>Resultado recalculado</small>"}</article>`,
           )
           .join("")}</div>`
       : `<div class="empty">Todavía no hay operaciones.<p>Los puntos y las acciones que registres aparecerán aquí.</p></div>`)
@@ -2327,6 +2327,8 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "sub") {
+    if (state.status !== "playing") return;
+    const liberos = state.roster.filter((p) => p.role === "Líbero");
     show(
       "Sustitución",
       `<p>Elige quién sale y quién entra. Los cambios de rol y la gestión automática del líbero se añadirán después.</p><form id="sub-form"><label>Sale<select name="out">${state.lineup.map((id) => `<option value="${id}">#${id} · ${esc(player(id).name)}</option>`).join("")}</select></label><label>Entra<select name="in">${state.roster
@@ -2336,7 +2338,7 @@ document.addEventListener("click", (e) => {
         )
         .join(
           "",
-        )}</select></label><button class="primary full" type="submit">Revisar cambio →</button></form>`,
+        )}</select></label><button class="primary full" type="submit">Revisar cambio →</button></form><section class="libero-change-section"><span class="eyebrow">LÍBERO ACTIVO</span>${liberos.length ? `<form id="libero-change-form"><label>Líbero activo<select name="activeLiberoId">${liberos.map((libero) => `<option value="${libero.id}" ${libero.id === state.activeLiberoId ? "selected" : ""}>#${libero.id} · ${esc(libero.name)}</option>`).join("")}</select></label><button class="primary full" type="submit" ${liberos.some((libero) => libero.id === state.activeLiberoId) ? "disabled" : ""}>Cambiar líbero activo</button></form>` : `<p>No hay líberos en la plantilla.</p>`}</section>`,
     );
     return;
   }
@@ -2597,6 +2599,8 @@ function editEvent(index) {
     )}</select></label>`;
   if (e.type === "sub")
     fields = `<label>Sale<select name="out">${options(players(before.lineup), e.out)}</select></label><label>Entra<select name="in">${options(players(state.roster.filter((p) => !before.lineup.includes(p.id) && p.role !== "Líbero").map((p) => p.id)), e.in)}</select></label>`;
+  if (e.type === "libero-change")
+    fields = `<label>Líbero activo<select name="activeLiberoId">${options(players(state.roster.filter((p) => p.role === "Líbero").map((p) => p.id)), e.activeLiberoId)}</select></label>`;
   if (e.type === "next")
     fields = `<label>Saque inicial<select name="serving">${options(
       [
@@ -2628,6 +2632,10 @@ document.addEventListener("change", (e) => {
     document.querySelector("#edit-grade").innerHTML = grades[e.target.value]
       .map((g) => `<option value="${g}">${e.target.value === "Ataque" && g === "#" ? "++" : g === "Blo" ? "Blq" : g}</option>`)
       .join("");
+  }
+  if (e.target.matches('#libero-change-form [name="activeLiberoId"]')) {
+    const submit = e.target.form?.querySelector('[type="submit"]');
+    if (submit) submit.disabled = Number(e.target.value) === state.activeLiberoId;
   }
 });
 document.addEventListener(
@@ -2684,6 +2692,19 @@ document.addEventListener(
       command.label = `Sustitución · Sale #${command.out} → Entra #${command.in}`;
     }
 
+    if (original.type === "libero-change") {
+      command.activeLiberoId = Number(data.get("activeLiberoId"));
+      const oldLibero = state.roster.find(
+        (player) => player.id === state.undo[index].activeLiberoId,
+      );
+      const newLibero = state.roster.find(
+        (player) => player.id === command.activeLiberoId,
+      );
+      command.label = oldLibero
+        ? `Cambio de líbero activo · ${oldLibero.name} → ${newLibero?.name || ""}`
+        : `Líbero activo: ${newLibero?.name || ""}`;
+    }
+
     if (original.type === "next") {
       command.serving = data.get("serving") === "ours";
       command.lineup = original.lineup ? [...original.lineup] : undefined;
@@ -2696,6 +2717,22 @@ document.addEventListener(
   true,
 );
 document.addEventListener("submit", (e) => {
+  if (e.target.id === "libero-change-form") {
+    e.preventDefault();
+    if (state.status !== "playing") return;
+    const activeLiberoId = Number(new FormData(e.target).get("activeLiberoId"));
+    if (activeLiberoId === state.activeLiberoId) return;
+    const oldLibero = player(state.activeLiberoId);
+    const newLibero = player(activeLiberoId);
+    commit({
+      type: "libero-change",
+      activeLiberoId,
+      label: oldLibero
+        ? `Cambio de líbero activo · ${oldLibero.name} → ${newLibero?.name || ""}`
+        : `Líbero activo: ${newLibero?.name || ""}`,
+    });
+    return;
+  }
   if (e.target.id !== "sub-form") return;
   e.preventDefault();
   const data = new FormData(e.target),
