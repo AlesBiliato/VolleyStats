@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {initial,transition} from '../src/domain.js';
 import {correctEvent} from '../src/corrections.js';
-import {statistics,percent} from '../src/statistics.js';
+import {aggregatePlayerStatistics,statistics,percent} from '../src/statistics.js';
 import {loadMatch,saveMatch} from '../src/storage.js';
 const point=(team)=>({type:'point',team,label:'Punto'});
 function play(commands){return commands.reduce(transition,initial());}
@@ -61,7 +61,7 @@ test('BP conserva los puntos de jugadores en K2 y G-P usa puntos menos errores t
  const p=statistics(s).players.find(player=>player.id===7);
  assert.equal(p.points,1);assert.equal(p.breakPoints,1);assert.equal(p.gp,-1);
 });
-test('G-P usa únicamente puntos ganados y acciones que conceden punto al rival',()=>{
+test('G-P usa puntos ganados y pérdidas terminales atribuibles al jugador',()=>{
  let s=play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},{type:'action',player:7,action:'Ataque',grade:'=',label:'Ataque ='}]);let p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,2);assert.equal(p.attackErrors,1);assert.equal(p.kills,0);assert.equal(p.points,0);assert.equal(p.errors,1);assert.equal(p.gp,-1);
  s=play([{type:'action',player:7,action:'Saque',grade:'#',label:'Saque #'},{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque #'}]);p=statistics(s).players.find(player=>player.id===7);assert.equal(p.points,2);assert.equal(p.aces,1);assert.equal(p.kills,1);assert.equal(p.errors,0);assert.equal(p.gp,2);
  s=play([{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque #'},{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},{type:'action',player:7,action:'Ataque',grade:'=',label:'Ataque ='},{type:'action',player:7,action:'Ataque',grade:'Blo',label:'Ataque Blo'}]);p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,4);assert.equal(p.kills,1);assert.equal(p.attackErrors,1);assert.equal(p.blocked,1);assert.equal(p.points,1);assert.equal(p.errors,2);assert.equal(p.gp,-1);
@@ -87,4 +87,58 @@ test('Las valoraciones actuales y legacy de Saque conservan su semántica',()=>{
  for(const [grade,score,expected] of cases){const s=play([{type:'action',player:7,action:'Saque',grade,label:`Saque ${grade}`}]);assert.deepEqual(s.score,score);const p=statistics(s).players.find(player=>player.id===7);for(const [key,value] of Object.entries(expected))assert.equal(p[key],value,`${grade} ${key}`);}
  const combined=play(['#','?','='].map(grade=>({type:'action',player:7,action:'Saque',grade,label:`Saque ${grade}`})));const p=statistics(combined).players.find(player=>player.id===7);assert.equal(p.serve,3);assert.equal(p.aces,1);assert.equal(p.serveErrors,1);assert.equal(p.points,1);assert.equal(p.errors,1);assert.equal(p.gp,0);
  const legacy=play([{type:'action',player:7,action:'Saque',grade:'+',label:'Saque +'}]);const replayed=correctEvent(legacy,0,{type:'action',player:7,action:'Saque',grade:'-',label:'Saque -'});assert.equal(replayed.events[0].grade,'-');assert.deepEqual(replayed.score,[0,1]);assert.equal(statistics(replayed).players.find(player=>player.id===7).gp,-1);
+});
+
+test('Cada acción terminal negativa identifica su error visible y su atribución en G-P',()=>{
+ const cases=[
+  ['Saque','=',[0,1],{serveErrors:1}],
+  ['Recepción','=',[0,1],{receptionErrors:1}],
+  ['Ataque','=',[0,1],{attackErrors:1}],
+  ['Ataque','Blo',[0,1],{blocked:1}],
+  ['Bloqueo','=',[0,1],{blockErrors:1,gp:0}],
+  ['Bloqueo','#',[1,0],{points:1,errors:0,gp:1,blockPoints:1,blockErrors:0}],
+ ];
+ const metricKeys=['points','errors','gp','serveErrors','receptionErrors','attackErrors','blocked','blockPoints','blockErrors'];
+ for(const [action,grade,score,overrides] of cases){
+  const state=play([{type:'action',player:9,action,grade,label:`${action} ${grade}`}]);
+  const player=statistics(state).players.find(candidate=>candidate.id===9);
+  const expected={points:0,errors:1,gp:-1,serveErrors:0,receptionErrors:0,attackErrors:0,blocked:0,blockPoints:0,blockErrors:0,...overrides};
+  assert.deepEqual(state.score,score,`${action} ${grade} marcador`);
+  assert.deepEqual(Object.fromEntries(metricKeys.map(key=>[key,player[key]])),expected,`${action} ${grade} métricas`);
+ }
+});
+
+test('Saque = y dos Bloqueo = dejan G-P -1 y agregan los errores de bloqueo',()=>{
+ const state=play([
+  {type:'action',player:9,action:'Saque',grade:'=',label:'Saque =' },
+  {type:'action',player:9,action:'Bloqueo',grade:'=',label:'Bloqueo =' },
+  {type:'action',player:9,action:'Bloqueo',grade:'=',label:'Bloqueo =' },
+ ]);
+ const stats=statistics(state);
+ const player=stats.players.find(candidate=>candidate.id===9);
+ assert.deepEqual(state.score,[0,3]);
+ assert.equal(player.points,0);
+ assert.equal(player.errors,3);
+ assert.equal(player.gp,-1);
+ assert.equal(player.serveErrors,1);
+ assert.equal(player.blockErrors,2);
+ assert.equal(player.attackErrors,0);
+ assert.equal(player.blocked,0);
+ const total=aggregatePlayerStatistics(stats.players);
+ assert.equal(total.blockErrors,2);
+ assert.equal(total.gp,-1);
+});
+
+test('Ataque Blo penaliza G-P y Bloqueo = solo suma error de bloqueo',()=>{
+ const state=play([
+  {type:'action',player:9,action:'Ataque',grade:'Blo',label:'Ataque Blo'},
+  {type:'action',player:9,action:'Bloqueo',grade:'=',label:'Bloqueo =' },
+ ]);
+ const player=statistics(state).players.find(candidate=>candidate.id===9);
+ assert.deepEqual(state.score,[0,2]);
+ assert.equal(player.errors,2);
+ assert.equal(player.blocked,1);
+ assert.equal(player.attackErrors,0);
+ assert.equal(player.blockErrors,1);
+ assert.equal(player.gp,-1);
 });

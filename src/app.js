@@ -2863,7 +2863,7 @@ function statsBody(tab) {
       ["Saque", ["Tot", "Err", "Punto directo"]],
       ["Recepción", ["Tot", "Err", "Pos %", "Exc. %"]],
       ["Ataque", ["Tot", "Err", "Blq", "Exc", "Exc. %"]],
-      ["Bloqueo", ["Puntos"]],
+      ["Bloqueo", ["Err", "Puntos"]],
     ];
     const empty = (n) => n || "·";
     const pointTotals = aggregatePlayerStatistics(s.players);
@@ -2883,7 +2883,7 @@ function statsBody(tab) {
         p.kills,
         percent(p.kills, p.attack),
       ],
-      [p.blockPoints],
+      [p.blockErrors, p.blockPoints],
     ];
     return `<div class="player-stats"><table><thead><tr><th rowspan="2" scope="col">Jugador</th>${groups.map(([name, headers]) => `<th class="stat-boundary" colspan="${headers.length}" scope="colgroup">${name}</th>`).join("")}</tr><tr>${groups.map(([, headers]) => headers.map((label, i) => `<th class="${i === 0 ? "stat-boundary" : ""}" scope="col">${label}</th>`).join("")).join("")}</tr></thead><tbody>${s.players
       .map((p) => {
@@ -2904,7 +2904,7 @@ function statsBody(tab) {
       )
       .join(
         "",
-    )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: puntos ganados menos acciones que conceden punto al rival · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
+    )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: puntos ganados menos pérdidas atribuibles; Bloqueo Err no penaliza · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
   }
   if (tab === "K1/K2") {
     const card = (phase, title, description) => {

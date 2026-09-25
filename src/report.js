@@ -12,7 +12,7 @@ export const generalGroups = [
   { label: "SAQUE", columns: ["Tot", "Err", "Punto directo"] },
   { label: "RECEPCIÓN", columns: ["Tot", "Err", "Pos.%", "Exc.%"] },
   { label: "ATAQUE", columns: ["Tot", "Err", "Blq", "Exc", "Exc.%"] },
-  { label: "BLOQUEO", columns: ["Puntos"] },
+  { label: "BLOQUEO", columns: ["Err", "Puntos"] },
 ];
 
 function generalMetrics(player) {
@@ -40,6 +40,7 @@ function generalMetrics(player) {
     blocked: player.blocked,
     kills: player.kills,
     attackEfficiency: percent(player.kills, player.attack),
+    blockErrors: player.blockErrors,
     blockPoints: player.blockPoints,
   };
 }

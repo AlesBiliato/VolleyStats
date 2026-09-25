@@ -93,6 +93,7 @@ function generalValues(metrics) {
     metrics.blocked,
     metrics.kills,
     metrics.attackEfficiency,
+    metrics.blockErrors,
     metrics.blockPoints,
   ].map((value) => (value === "—" ? "-" : value));
 }

@@ -15,6 +15,7 @@ const blank = () => ({
   serve: 0,
   serveErrors: 0,
   aces: 0,
+  blockErrors: 0,
   blockPoints: 0,
   breakPoints: 0,
   positiveActions: 0,
@@ -43,6 +44,7 @@ export const playerStatKeys = [
   "attackErrors",
   "blocked",
   "kills",
+  "blockErrors",
   "blockPoints",
 ];
 
@@ -159,17 +161,21 @@ export function statistics(state, set = "all") {
     player.actions++;
     player.points += won;
     player.errors += lost;
+    const gpLost = event.action === "Bloqueo" ? 0 : lost;
+    player.gp += won - gpLost;
     if (event.phase === "K2" && won) player.breakPoints++;
     if (["#", "+"].includes(event.grade)) player.positiveActions++;
     else if (["=", "Blo", "-"].includes(event.grade)) player.negativeActions++;
-    player.gp = player.points - player.errors;
 
     if (event.action === "Saque") {
       player.serve++;
       player.serveErrors += lost;
       if (won && event.grade === "#") player.aces++;
     }
-    if (event.action === "Bloqueo" && won) player.blockPoints++;
+    if (event.action === "Bloqueo") {
+      player.blockErrors += lost;
+      player.blockPoints += won;
+    }
     if (event.action === "Ataque") {
       player.attack++;
       player.kills += won;

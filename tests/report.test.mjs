@@ -102,7 +102,7 @@ test("General conserva la salida canónica de statistics.js", () => {
   assert.equal(row.metrics.attack, source.attack);
 });
 
-test("G-P mantiene puntos terminales menos errores terminales", () => {
+test("G-P mantiene puntos terminales menos pérdidas atribuibles", () => {
   const row = buildMatchReport(finishedSample()).periods[0].general.rows.find(
     (player) => player.id === 7,
   );
@@ -126,6 +126,29 @@ test("ataque bloqueado suma Blq, no Err de ataque y resta en G-P", () => {
   assert.equal(row.metrics.blocked, 1);
   assert.equal(row.metrics.attackErrors, 0);
   assert.equal(row.metrics.gp, 0);
+});
+
+test("General distingue los errores de bloqueo que no penalizan G-P", () => {
+  const state = run(initial(), [
+    action(9, "Saque", "="),
+    action(9, "Bloqueo", "="),
+    action(9, "Bloqueo", "="),
+    { type: "finish-match", label: "Partido finalizado" },
+  ]);
+  const report = buildMatchReport(state);
+  const general = report.periods[0].general;
+  const source = statistics(state).players.find((player) => player.id === 9);
+  const row = general.rows.find((player) => player.id === 9);
+  const blockGroup = general.groups.find((group) => group.label === "BLOQUEO");
+  assert.deepEqual(blockGroup.columns, ["Err", "Puntos"]);
+  assert.equal(source.blockErrors, 2);
+  assert.equal(row.metrics.blockErrors, source.blockErrors);
+  assert.equal(row.metrics.serveErrors, 1);
+  assert.equal(row.metrics.attackErrors, 0);
+  assert.equal(row.metrics.blocked, 0);
+  assert.equal(row.metrics.points, 0);
+  assert.equal(row.metrics.gp, -1);
+  assert.equal(general.total.metrics.blockErrors, 2);
 });
 
 test("errores del rival proceden de los puntos registrados", () => {
