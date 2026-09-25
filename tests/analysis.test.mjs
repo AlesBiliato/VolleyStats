@@ -36,28 +36,43 @@ test('Cambiar jugador, valoración, sustitución y saque inicial',()=>{
 test('Estadísticas agrupan puntos reales, fases, rotación y set sin contar cierres',()=>{
  const s=play([{type:'action',player:7,action:'Recepción',grade:'#',label:'Recepción'},{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque'},{type:'action',player:7,action:'Ataque',grade:'Blo',label:'Ataque'}, {type:'point',team:1,category:'unforced-error',reason:'net',label:'Red'},{type:'point',team:1,category:'unforced-error',reason:'other',label:'Otros'},{type:'finish',label:'Cierre'},{type:'next',serving:true,label:'Inicio'},point(0)]);
  const stats=statistics(s);assert.equal(stats.total.won,2);assert.equal(stats.total.lost,3);assert.equal(stats.total.actions,3);assert.equal(stats.unforced,2);assert.equal(stats.netErrors,1);assert.equal(stats.otherErrors,1);
- const p=stats.players.find(p=>p.id===7);assert.equal(p.attack,2);assert.equal(percent(p.kills-p.attackErrors,p.attack),'0 %');assert.equal(percent(p.positiveReception,p.reception),'100 %');assert.equal(percent(0,0),'—');assert.equal(statistics(s,'1').total.won,1);assert.equal(statistics(s,'2').total.actions,0);assert.equal(stats.phases[0].won,1);assert.equal(stats.phases[1].won,1);
+ const p=stats.players.find(p=>p.id===7);assert.equal(p.attack,2);assert.equal(percent(p.kills-p.attackErrors,p.attack),'50 %');assert.equal(percent(p.positiveReception,p.reception),'100 %');assert.equal(percent(0,0),'—');assert.equal(statistics(s,'1').total.won,1);assert.equal(statistics(s,'2').total.actions,0);assert.equal(stats.phases[0].won,1);assert.equal(stats.phases[1].won,1);
 });
 
 test('Ataque - cuenta como ataque y calidad negativa, no como error de punto',()=>{
  const s=play([{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'}]);
- const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);assert.equal(p.attackErrors,0);assert.equal(p.negativeActions,1);assert.equal(p.gp,-1);assert.equal(p.points,0);
- const plus=correctEvent(s,0,{type:'action',player:7,action:'Ataque',grade:'+',label:'Ataque +'});assert.deepEqual(plus.score,s.score);const plusStats=statistics(plus).players.find(player=>player.id===7);assert.equal(plusStats.attack,1);assert.equal(plusStats.kills,0);assert.equal(plusStats.attackErrors,0);assert.equal(plusStats.points,0);assert.equal(plusStats.errors,0);assert.equal(plusStats.positiveActions,1);
+ const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);assert.equal(p.attackErrors,0);assert.equal(p.negativeActions,1);assert.equal(p.gp,0);assert.equal(p.points,0);
+ const plus=correctEvent(s,0,{type:'action',player:7,action:'Ataque',grade:'+',label:'Ataque +'});assert.deepEqual(plus.score,s.score);const plusStats=statistics(plus).players.find(player=>player.id===7);assert.equal(plusStats.attack,1);assert.equal(plusStats.kills,0);assert.equal(plusStats.attackErrors,0);assert.equal(plusStats.points,0);assert.equal(plusStats.errors,0);assert.equal(plusStats.positiveActions,1);assert.equal(plusStats.gp,0);
  const negative=correctEvent(plus,0,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});assert.deepEqual(negative.score,s.score);const negativeStats=statistics(negative).players.find(player=>player.id===7);assert.equal(negativeStats.attack,1);assert.equal(negativeStats.kills,0);assert.equal(negativeStats.attackErrors,0);assert.equal(negativeStats.points,0);assert.equal(negativeStats.errors,0);
 });
 test('Las cuatro valoraciones actuales de Ataque conservan intentos y resultados',()=>{
  const cases=[
-  ['#',[1,0],{kills:1,attackErrors:0,blocked:0,points:1,errors:0}],
-  ['?',[0,0],{kills:0,attackErrors:0,blocked:0,points:0,errors:0}],
-  ['=',[0,1],{kills:0,attackErrors:1,blocked:0,points:0,errors:1}],
-  ['Blo',[0,1],{kills:0,attackErrors:1,blocked:1,points:0,errors:1}],
+  ['#',[1,0],{kills:1,attackErrors:0,blocked:0,points:1,errors:0,gp:1}],
+  ['?',[0,0],{kills:0,attackErrors:0,blocked:0,points:0,errors:0,gp:0}],
+  ['=',[0,1],{kills:0,attackErrors:1,blocked:0,points:0,errors:1,gp:-1}],
+  ['Blo',[0,1],{kills:0,attackErrors:0,blocked:1,points:0,errors:1,gp:-1}],
  ];
  for(const [grade,score,expected] of cases){const s=play([{type:'action',player:7,action:'Ataque',grade,label:`Ataque ${grade}`}]);assert.deepEqual(s.score,score);const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,1);for(const [key,value] of Object.entries(expected))assert.equal(p[key],value,`${grade} ${key}`);}
  const neutral=play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'}]);const p=statistics(neutral).players.find(player=>player.id===7);assert.equal(p.positiveActions,0);assert.equal(p.negativeActions,0);assert.equal(p.gp,0);
 });
-test('BP cuenta puntos de jugadores en K2 y G-P resta acciones negativas',()=>{
+test('BP conserva los puntos de jugadores en K2 y G-P usa puntos menos errores terminales',()=>{
  let s=initial();s.serving=true;
  for(const [action,grade] of [['Ataque','#'],['Recepción','+'],['Recepción','='],['Ataque','Blo']])s=transition(s,{type:'action',player:7,action,grade,label:`${action} ${grade}`});
  const p=statistics(s).players.find(player=>player.id===7);
- assert.equal(p.points,1);assert.equal(p.breakPoints,1);assert.equal(p.gp,0);
+ assert.equal(p.points,1);assert.equal(p.breakPoints,1);assert.equal(p.gp,-1);
+});
+test('G-P usa únicamente puntos ganados y acciones que conceden punto al rival',()=>{
+ let s=play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},{type:'action',player:7,action:'Ataque',grade:'=',label:'Ataque ='}]);let p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,2);assert.equal(p.attackErrors,1);assert.equal(p.kills,0);assert.equal(p.points,0);assert.equal(p.errors,1);assert.equal(p.gp,-1);
+ s=play([{type:'action',player:7,action:'Saque',grade:'#',label:'Saque #'},{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque #'}]);p=statistics(s).players.find(player=>player.id===7);assert.equal(p.points,2);assert.equal(p.aces,1);assert.equal(p.kills,1);assert.equal(p.errors,0);assert.equal(p.gp,2);
+ s=play([{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque #'},{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},{type:'action',player:7,action:'Ataque',grade:'=',label:'Ataque ='},{type:'action',player:7,action:'Ataque',grade:'Blo',label:'Ataque Blo'}]);p=statistics(s).players.find(player=>player.id===7);assert.equal(p.attack,4);assert.equal(p.kills,1);assert.equal(p.attackErrors,1);assert.equal(p.blocked,1);assert.equal(p.points,1);assert.equal(p.errors,2);assert.equal(p.gp,-1);
+});
+test('Recepción sigue el criterio de Tot, Err, Pos %, Exc % y G-P',()=>{
+ const expected={
+  '#':{positiveReception:1,excellentReception:1,receptionErrors:0,gp:0},
+  '+':{positiveReception:1,excellentReception:0,receptionErrors:0,gp:0},
+  '-':{positiveReception:0,excellentReception:0,receptionErrors:0,gp:0},
+  '=':{positiveReception:0,excellentReception:0,receptionErrors:1,gp:-1},
+ };
+ for(const [grade,values] of Object.entries(expected)){const s=play([{type:'action',player:7,action:'Recepción',grade,label:`Recepción ${grade}`}]);const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.reception,1);assert.equal(p.points,0);for(const [key,value] of Object.entries(values))assert.equal(p[key],value,`${grade} ${key}`);}
+ const combined=play(['#','+','-','='].map(grade=>({type:'action',player:7,action:'Recepción',grade,label:`Recepción ${grade}`})));const p=statistics(combined).players.find(player=>player.id===7);assert.equal(p.reception,4);assert.equal(p.receptionErrors,1);assert.equal(percent(p.positiveReception,p.reception),'50 %');assert.equal(percent(p.excellentReception,p.reception),'25 %');assert.equal(p.gp,-1);
 });

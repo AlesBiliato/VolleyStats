@@ -20,10 +20,10 @@ export function statistics(state,set='all'){
   p.actions++;p.points+=won;p.errors+=lost;
   if(e.phase==='K2'&&won)p.breakPoints++;
   if(['#','+'].includes(e.grade))p.positiveActions++;else if(['=','Blo','-'].includes(e.grade))p.negativeActions++;
-  p.gp=p.positiveActions-p.negativeActions;
+  p.gp=p.points-p.errors;
   if(e.action==='Saque'){p.serve++;p.serveErrors+=lost;if(won&&e.grade==='#')p.aces++;}
   if(e.action==='Bloqueo'&&won)p.blockPoints+=1;
-  if(e.action==='Ataque'){p.attack++;p.kills+=won;p.attackErrors+=lost;if(e.grade==='Blo')p.blocked++;}
+  if(e.action==='Ataque'){p.attack++;p.kills+=won;p.attackErrors+=e.grade==='='?1:0;if(e.grade==='Blo')p.blocked++;}
   if(e.action==='Recepción'){p.reception++;p.receptionErrors+=lost;p.positiveReception+=['#','+'].includes(e.grade)?1:0;p.excellentReception+=e.grade==='#'?1:0;}
  }
  return {total,players,phases,rotations,unforced,rotationErrors,netErrors,otherErrors,substitutions};

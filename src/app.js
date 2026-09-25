@@ -2828,7 +2828,7 @@ function statsBody(tab) {
       )
       .join(
         "",
-      )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: acciones positivas (# y +) menos negativas (−, =, Blq) · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
+    )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: puntos ganados menos acciones que conceden punto al rival · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
   }
   if (tab === "K1/K2") {
     const card = (phase, title, description) => {
