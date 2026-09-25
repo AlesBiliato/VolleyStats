@@ -27,6 +27,12 @@ test('Ataque ? registra el intento y mantiene marcador, saque, rotación y aline
   assert.deepEqual(n.score,s.score);assert.equal(n.serving,serving);assert.equal(n.rotation,s.rotation);assert.deepEqual(n.lineup,s.lineup);assert.equal(n.events.at(-1).grade,'?');assert.deepEqual(transition(n,{type:'undo'}),s);
  }
 });
+test('Saque ? registra la acción y mantiene marcador, saque, rotación y alineación',()=>{
+ for(const serving of [true,false]){
+  const s=initial();s.serving=serving;const n=transition(s,{type:'action',player:7,action:'Saque',grade:'?',label:'Saque ?'});
+  assert.deepEqual(n.score,s.score);assert.equal(n.serving,serving);assert.equal(n.rotation,s.rotation);assert.deepEqual(n.lineup,s.lineup);assert.equal(n.events.at(-1).grade,'?');assert.deepEqual(transition(n,{type:'undo'}),s);
+ }
+});
 test('Ataque negativo continúa la jugada sin punto, saque ni rotación',()=>{
   for(const serving of [true,false]){
     const s=initial();s.serving=serving;const n=transition(s,{type:'action',player:7,action:'Ataque',grade:'-',label:'Ataque -'});

@@ -1,7 +1,7 @@
 import {transition} from './domain.js';
 
-export const grades={Saque:['#','+','-','='],'Recepción':['#','+','-','='],Ataque:['#','?','=','Blo'],Bloqueo:['#','=']};
-const legacyGrades={Ataque:['+','-']};
+export const grades={Saque:['#','?','='],'Recepción':['#','+','-','='],Ataque:['#','?','=','Blo'],Bloqueo:['#','=']};
+const legacyGrades={Saque:['+','-'],Ataque:['+','-']};
 const validGrade=(action,grade)=>grades[action]?.includes(grade)||legacyGrades[action]?.includes(grade);
 export function eventCommand(event){
  const keys={point:['team','category','reason'],action:['player','action','grade'],sub:['out','in'],'libero-change':['activeLiberoId'],finish:[],'finish-match':[],next:['serving','lineup','activeLiberoId']}[event.type];

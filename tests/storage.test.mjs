@@ -24,6 +24,9 @@ test('Persiste y recarga un Ataque - sin perder su valoración',()=>{
 test('Persiste y recarga un Ataque ? sin perder su valoración',()=>{
  localStore();const state=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'});saveMatch(state);assert.equal(loadMatch().events.at(-1).grade,'?');assert.deepEqual(loadMatch().score,[0,0]);
 });
+test('Persiste y recarga un Saque ? sin perder su valoración',()=>{
+ localStore();const state=transition(initial(),{type:'action',player:7,action:'Saque',grade:'?',label:'Saque ?'});saveMatch(state);assert.equal(loadMatch().events.at(-1).grade,'?');assert.deepEqual(loadMatch().score,[0,0]);
+});
 test('Persiste y recarga partidos finalizados',()=>{
  localStore();const state=transition(initial(),{type:'finish-match',label:'Partido finalizado'});saveMatch(state);const loaded=loadMatch();assert.deepEqual(loaded,state);assert.equal(loaded.status,'finished');assert.equal(loaded.events.at(-1).type,'finish-match');
 });

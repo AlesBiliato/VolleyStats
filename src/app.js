@@ -1390,16 +1390,22 @@ function actionDialog() {
 }
 function gradeLabel(actionName, grade) {
   if (grade === "Blo") return "Blq";
-  if (grade === "#" && !["Ataque", "Recepción"].includes(actionName)) return "++";
+  if (grade === "#" && actionName === "Bloqueo") return "++";
   return grade;
 }
 function gradeDescription(actionName, grade) {
-  if (grade === "#") return actionName === "Recepción" ? "Perfecta" : "Punto";
+  if (grade === "#") return actionName === "Recepción" ? "Perfecta" : actionName === "Saque" ? "Punto directo" : "Punto";
   if (grade === "?") return "Continúa";
   if (grade === "+") return "Positiva";
   if (grade === "-") return actionName === "Saque" ? "Punto rival" : "Free ball";
   if (grade === "Blo") return "Bloqueado";
   return "Error";
+}
+function editableGrade(actionName, grade) {
+  if (actionName === "Ataque" && ["+", "-"].includes(grade)) return "?";
+  if (actionName === "Saque" && grade === "+") return "?";
+  if (actionName === "Saque" && grade === "-") return "=";
+  return grade;
 }
 function saveRosterPlayer(form, originalId = null) {
   const data = new FormData(form);
@@ -2898,7 +2904,7 @@ function editEvent(index) {
       e.action,
     )}</select></label><label>Valoración<select name="grade" id="edit-grade">${options(
       grades[e.action].map((g) => [g, gradeLabel(e.action, g)]),
-      e.action === "Ataque" && ["+", "-"].includes(e.grade) ? "?" : e.grade,
+      editableGrade(e.action, e.grade),
     )}</select></label>`;
   if (e.type === "sub")
     fields = `<label>Sale<select name="out">${options(players(before.lineup), e.out)}</select></label><label>Entra<select name="in">${options(players(state.roster.filter((p) => !before.lineup.includes(p.id) && p.role !== "Líbero").map((p) => p.id)), e.in)}</select></label>`;

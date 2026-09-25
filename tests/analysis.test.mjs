@@ -76,3 +76,15 @@ test('Recepción sigue el criterio de Tot, Err, Pos %, Exc % y G-P',()=>{
  for(const [grade,values] of Object.entries(expected)){const s=play([{type:'action',player:7,action:'Recepción',grade,label:`Recepción ${grade}`}]);const p=statistics(s).players.find(player=>player.id===7);assert.equal(p.reception,1);assert.equal(p.points,0);for(const [key,value] of Object.entries(values))assert.equal(p[key],value,`${grade} ${key}`);}
  const combined=play(['#','+','-','='].map(grade=>({type:'action',player:7,action:'Recepción',grade,label:`Recepción ${grade}`})));const p=statistics(combined).players.find(player=>player.id===7);assert.equal(p.reception,4);assert.equal(p.receptionErrors,1);assert.equal(percent(p.positiveReception,p.reception),'50 %');assert.equal(percent(p.excellentReception,p.reception),'25 %');assert.equal(p.gp,-1);
 });
+test('Las valoraciones actuales y legacy de Saque conservan su semántica',()=>{
+ const cases=[
+  ['#',[1,0],{serve:1,aces:1,serveErrors:0,points:1,errors:0,gp:1}],
+  ['?',[0,0],{serve:1,aces:0,serveErrors:0,points:0,errors:0,gp:0}],
+  ['=',[0,1],{serve:1,aces:0,serveErrors:1,points:0,errors:1,gp:-1}],
+  ['+',[0,0],{serve:1,aces:0,serveErrors:0,points:0,errors:0,gp:0}],
+  ['-',[0,1],{serve:1,aces:0,serveErrors:1,points:0,errors:1,gp:-1}],
+ ];
+ for(const [grade,score,expected] of cases){const s=play([{type:'action',player:7,action:'Saque',grade,label:`Saque ${grade}`}]);assert.deepEqual(s.score,score);const p=statistics(s).players.find(player=>player.id===7);for(const [key,value] of Object.entries(expected))assert.equal(p[key],value,`${grade} ${key}`);}
+ const combined=play(['#','?','='].map(grade=>({type:'action',player:7,action:'Saque',grade,label:`Saque ${grade}`})));const p=statistics(combined).players.find(player=>player.id===7);assert.equal(p.serve,3);assert.equal(p.aces,1);assert.equal(p.serveErrors,1);assert.equal(p.points,1);assert.equal(p.errors,1);assert.equal(p.gp,0);
+ const legacy=play([{type:'action',player:7,action:'Saque',grade:'+',label:'Saque +'}]);const replayed=correctEvent(legacy,0,{type:'action',player:7,action:'Saque',grade:'-',label:'Saque -'});assert.equal(replayed.events[0].grade,'-');assert.deepEqual(replayed.score,[0,1]);assert.equal(statistics(replayed).players.find(player=>player.id===7).gp,-1);
+});
