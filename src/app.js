@@ -326,7 +326,7 @@ function score() {
     state.status === "finished"
       ? ""
       : button("Finalizar partido", "finish-match", "finish-match");
-  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors error-tools">${button("No forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}${button(`<span>Todos los errores</span>${keyboardKey("E")}`, "keyboard-errors", "keyboard-errors-trigger", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
+  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button(`<b>+1</b> Rival${keyboardKey("0")}`, "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors error-tools">${button("No forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}${button(`<span>Todos los errores</span>${keyboardKey("E")}`, "keyboard-errors", "keyboard-errors-trigger", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
 }
 function court() {
   const activeLibero = state.activeLiberoId == null
@@ -2694,6 +2694,15 @@ function handleMatchKeyboard(event) {
       ? ".grade-options button"
       : ".action-options button";
     if (digit && clickNumberedKeyboardOption(selector, digit)) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (digit === "0" && !keyboardJerseyBuffer) {
+    const rivalPoint = document.querySelector('[data-cmd="theirs"]');
+    if (rivalPoint && !rivalPoint.disabled) {
+      rivalPoint.click();
       event.preventDefault();
     }
     return;
