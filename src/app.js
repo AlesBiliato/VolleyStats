@@ -101,6 +101,7 @@ let statsTab = "General",
 let page = hasMatch && state.demo ? "setup" : "match",
   selected = null,
   action = null,
+  keyboardJerseyBuffer = "",
   selectedSubOut = null,
   selectedSubIn = null,
   selectedLiberoId = null,
@@ -108,6 +109,11 @@ let page = hasMatch && state.demo ? "setup" : "match",
 const app = document.querySelector("#app"),
   modal = document.querySelector("#modal");
 modal.addEventListener("close", () => {
+  if (modal.dataset.context === "action") {
+    selected = null;
+    action = null;
+  }
+  modal.dataset.context = "";
   selectedSubOut = null;
   selectedSubIn = null;
   selectedLiberoId = null;
@@ -155,8 +161,33 @@ const unforcedReasons = [
   ["net", "Toque de red"],
   ["other", "Otros"],
 ];
+const keyboardErrorOptions = [
+  ["serve-error", "Error saque rival"],
+  ["attack-error", "Error ataque rival"],
+  ...unforcedReasons.map(([value, label]) => [
+    `record-unforced:${value}`,
+    label,
+  ]),
+];
 const button = (label, cmd, cls = "", disabled = false) =>
   `<button class="${cls}" data-cmd="${cmd}" ${disabled ? "disabled" : ""}>${label}</button>`;
+const keyboardKey = (label) =>
+  `<kbd class="keyboard-key" aria-hidden="true">${label}</kbd>`;
+function updateKeyboardJerseyStatus() {
+  const status = document.querySelector(".keyboard-jersey-status");
+  if (!status) return;
+  status.textContent = keyboardJerseyBuffer
+    ? `Dorsal: ${keyboardJerseyBuffer}`
+    : "";
+  status.classList.toggle("show", Boolean(keyboardJerseyBuffer));
+}
+function setKeyboardJerseyBuffer(value) {
+  keyboardJerseyBuffer = value;
+  updateKeyboardJerseyStatus();
+}
+function clearKeyboardJerseyBuffer() {
+  setKeyboardJerseyBuffer("");
+}
 function toast(s) {
   let el = document.querySelector("#toast");
 
@@ -198,6 +229,7 @@ function persist(next, message) {
   state = next;
   selected = null;
   action = null;
+  keyboardJerseyBuffer = "";
   modal.close();
   render();
   navigator.vibrate?.(25);
@@ -205,7 +237,7 @@ function persist(next, message) {
   return true;
 }
 function commit(command) {
-  if (Date.now() - lastTap < 400) return;
+  if (command.type !== "undo" && Date.now() - lastTap < 400) return;
   lastTap = Date.now();
   if (command.type === "undo" && state.correctionUndo) {
     persist(state.correctionUndo, "Corrección deshecha");
@@ -220,11 +252,36 @@ function commit(command) {
     command.type === "undo" ? "Última operación deshecha" : command.label,
   );
 }
-function show(title, body) {
+function performUndo() {
+  if (!state.undo.length && !state.correctionUndo) return false;
+  commit({ type: "undo", label: "Deshacer" });
+  return true;
+}
+function show(title, body, context = "") {
+  clearKeyboardJerseyBuffer();
   modal.classList.toggle("stats-dialog", title === "Estadísticas");
   modal.classList.toggle("substitution-dialog", title === "Sustitución");
+  modal.classList.toggle("action-dialog", context === "action");
+  modal.classList.toggle("keyboard-errors-dialog", context === "errors");
+  modal.dataset.context = context;
   modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYSTATS</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
   if (!modal.open) modal.showModal();
+}
+
+function openKeyboardErrors() {
+  if (state.status !== "playing") return;
+  show(
+    "Errores",
+    `<p>Elige el error que quieres registrar.</p><div class="keyboard-error-options">${keyboardErrorOptions
+      .map(([cmd, label], index) =>
+        button(
+          `<span>${esc(label)}</span>${keyboardKey(index + 1)}`,
+          cmd,
+        ),
+      )
+      .join("")}</div>`,
+    "errors",
+  );
 }
 function substitutionPlayerButton(player, kind, selectedId) {
   const isSelected = player.id === selectedId;
@@ -269,7 +326,7 @@ function score() {
     state.status === "finished"
       ? ""
       : button("Finalizar partido", "finish-match", "finish-match");
-  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors">${button("Errores nuestros NO forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
+  return `<aside class="score-panel"><div class="score-top"><span class="live-dot"></span> ${statusLabel} <span class="set-tag">SET ${state.set}</span></div><div class="score-names"><span>Nosotros</span><span>Rival</span></div><div class="score"><strong>${state.score[0]}</strong><span>:</span><strong>${state.score[1]}</strong></div><div class="serve-indicator" aria-label="${state.serving ? "Sacamos nosotros" : "Saca el rival"}"><span>${state.serving ? "&#x1F3D0;" : ""}</span><span aria-hidden="true"></span><span>${state.serving ? "" : "&#x1F3D0;"}</span></div><div class="set-results">${state.finishedSets.length ? state.finishedSets.map((s) => `<span>Set ${s.set} <b>${s.score.join("–")}</b></span>`).join("") : "Sets ganados <b>0 – 0</b>"}</div><div class="points">${button("<b>+1</b> Nosotros", "ours", "primary", state.status !== "playing")}${button("<b>+1</b> Rival", "theirs", "rival", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR RIVAL</span></div><div class="errors">${button("Error saque rival <span>↗</span>", "serve-error", "", state.status !== "playing")}${button("Error ataque rival <span>↗</span>", "attack-error", "", state.status !== "playing")}</div><div class="separator"><span>PUNTO POR ERROR NUESTRO</span></div><div class="errors error-tools">${button("No forzados <span>↗</span>", "unforced-error", "", state.status !== "playing")}${button(`<span>Todos los errores</span>${keyboardKey("E")}`, "keyboard-errors", "keyboard-errors-trigger", state.status !== "playing")}</div><div class="panel-note">Los puntos actualizan el saque y la rotación.</div><div class="match-end-actions ${finishMatchAction ? "open" : ""}">${setAction}${finishMatchAction}</div></aside>`;
 }
 function court() {
   const activeLibero = state.activeLiberoId == null
@@ -290,7 +347,7 @@ function court() {
     })
     .join(
       "",
-    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div>${activeLibero ? `<div class="active-libero"><span class="eyebrow">LÍBERO ACTIVO</span><button type="button" class="active-libero-control ${selected === activeLibero.id ? "selected" : ""}" data-cmd="player:${activeLibero.id}" aria-label="Líbero activo, dorsal ${activeLibero.id}, ${esc(activeLibero.name)}" ${state.status !== "playing" ? "disabled" : ""}><span class="jersey">${activeLibero.id}</span><span class="active-libero-name">${esc(activeLibero.name)}</span><small>L</small></button></div>` : ""}<div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${benchPlayers.length} disponibles</span></div><div class="bench-players">${benchPlayers
+    )}</div><div class="court-caption"><span>◉ ${selected ? "Jugador seleccionado" : "Toca un dorsal para registrar una acción"}</span><span>Zonas 1–6</span></div></div>${activeLibero ? `<div class="active-libero"><span class="eyebrow">LÍBERO ACTIVO</span><button type="button" class="active-libero-control ${selected === activeLibero.id ? "selected" : ""}" data-cmd="player:${activeLibero.id}" aria-label="Líbero activo, dorsal ${activeLibero.id}, ${esc(activeLibero.name)}" ${state.status !== "playing" ? "disabled" : ""}><span class="jersey">${activeLibero.id}</span><span class="active-libero-name">${esc(activeLibero.name)}</span>${keyboardKey("L")}</button></div>` : ""}<div class="bench"><div><span class="eyebrow">BANQUILLO</span><span class="bench-note">${benchPlayers.length} disponibles</span></div><div class="bench-players">${benchPlayers
     .map(
       (p) =>
         `<span class="bench-player ${p.role === "Líbero" ? "libero" : ""}" data-player-id="${p.id}"><b>${p.id}</b><span>${esc(p.name)}${p.role === "Líbero" ? " · L" : ""}</span></span>`,
@@ -1031,6 +1088,7 @@ function activateMatch(next) {
   statsSet = "all";
   pendingCorrection = null;
   selected = action = null;
+  keyboardJerseyBuffer = "";
   lastTap = 0;
   modal.close();
   render();
@@ -1141,6 +1199,9 @@ function renderRosterSelector() {
 }
 
 function render() {
+  if (page !== "match" || state.status !== "playing") {
+    keyboardJerseyBuffer = "";
+  }
   if (
     !hasMatch &&
     savedRosters.length &&
@@ -1199,6 +1260,7 @@ function render() {
       ${
         page === "match"
           ? `
+            <div class="keyboard-jersey-status ${keyboardJerseyBuffer ? "show" : ""}" role="status" aria-live="polite" aria-atomic="true">${keyboardJerseyBuffer ? `Dorsal: ${esc(keyboardJerseyBuffer)}` : ""}</div>
             <div class="match-grid">
               ${court()}
               ${score()}
@@ -1207,7 +1269,7 @@ function render() {
             <div class="toolbar">
               ${button("⇄ <span>Sustitución</span>", "sub", "", state.status !== "playing")}
               ${button("▥ <span>Estadísticas</span>", "stats")}
-              ${button("↶ <span>Deshacer</span>", "undo", "", !state.undo.length && !state.correctionUndo)}
+              ${button(`↶ <span>Deshacer</span>${keyboardKey("Ctrl+Z")}`, "undo", "", !state.undo.length && !state.correctionUndo)}
               ${button("◷ <span>Corrección / Historial</span>", "history")}
               <span>Un toque. Una acción. Todo registrado.</span>
             </div>
@@ -1318,10 +1380,12 @@ function historyRows(all = false) {
 }
 function actionDialog() {
   const p = player(selected);
+  if (!p) return;
   const activeLiberoSelected = isActiveLibero(selected);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${["Saque", "Recepción", "Ataque", "Bloqueo"].map((a) => button(a, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${(action === "Bloqueo" ? ["#", "="] : action === "Ataque" ? ["#", "+", "-", "=", "Blo"] : ["#", "+", "-", "="]).map((g) => button(`<b>${g === "#" ? "++" : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${activeLiberoSelected ? "" : `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "")).join("")}</div>`}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${g === "#" ? (action === "Recepción" ? "#" : "++") : g === "Blo" ? "Blq" : g}</b><span>${g === "#" ? (action === "Recepción" ? "Perfecta" : "Punto") : g === "+" ? "Positiva" : g === "-" ? (action === "Saque" ? "Punto rival" : action === "Ataque" ? "Contraataque" : "Free ball") : g === "Blo" ? "Bloqueado" : "Error"}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    "action",
   );
 }
 function saveRosterPlayer(form, originalId = null) {
@@ -2306,6 +2370,10 @@ document.addEventListener("click", (e) => {
     );
     return;
   }
+  if (cmd === "keyboard-errors") {
+    openKeyboardErrors();
+    return;
+  }
   if (cmd === "record-unforced") {
     const reason = unforcedReasons.find(([reason]) => reason === value)?.[1];
     if (!reason) return;
@@ -2319,6 +2387,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "player") {
+    clearKeyboardJerseyBuffer();
     selected = Number(value);
     action = isActiveLibero(selected) ? "Recepción" : null;
     actionDialog();
@@ -2358,7 +2427,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (cmd === "confirm-undo") {
-    commit({ type: "undo", label: "Deshacer" });
+    performUndo();
     return;
   }
   if (cmd === "sub") {
@@ -2517,6 +2586,138 @@ document.addEventListener("click", (e) => {
     return;
   }
 });
+
+function isEditableKeyboardTarget(target) {
+  return target instanceof Element && Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+    ),
+  );
+}
+
+function keyboardDigitFromEvent(event) {
+  if (/^[0-9]$/.test(event.key)) return event.key;
+  const numpad = /^Numpad([0-9])$/.exec(event.code);
+  return numpad?.[1] ?? null;
+}
+
+function clickNumberedKeyboardOption(selector, digit) {
+  const index = Number(digit) - 1;
+  if (index < 0) return false;
+  const options = [...document.querySelectorAll(selector)].filter(
+    (option) => !option.disabled && option.offsetParent !== null,
+  );
+  const option = options[index];
+  if (!option) return false;
+  option.click();
+  return true;
+}
+
+function confirmKeyboardJersey() {
+  if (!keyboardJerseyBuffer) return false;
+  const entered = keyboardJerseyBuffer;
+  const jersey = Number(entered);
+  clearKeyboardJerseyBuffer();
+  if (!state.lineup.includes(jersey)) {
+    toast(`El dorsal #${entered} no está en pista`);
+    return true;
+  }
+  const control = [...document.querySelectorAll('[data-cmd^="player:"]')]
+    .find((candidate) => candidate.dataset.cmd === `player:${jersey}`);
+  if (!control || control.disabled) return true;
+  control.click();
+  return true;
+}
+
+function closeKeyboardContext() {
+  if (!modal.open) return false;
+  if (!["action", "errors"].includes(modal.dataset.context)) return false;
+  modal.close();
+  return true;
+}
+
+function handleMatchKeyboard(event) {
+  if (isEditableKeyboardTarget(event.target)) return;
+
+  const context = modal.open ? modal.dataset.context : "base";
+  if (modal.open && !["action", "errors"].includes(context)) return;
+
+  const key = event.key.toLowerCase();
+  if (event.ctrlKey && !event.altKey && key === "z") {
+    if (page === "match" && performUndo()) event.preventDefault();
+    return;
+  }
+
+  if (page !== "match" || state.status !== "playing") return;
+
+  if (event.key === "Escape") {
+    if (context === "base" && keyboardJerseyBuffer) {
+      clearKeyboardJerseyBuffer();
+      event.preventDefault();
+    } else if (closeKeyboardContext()) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  const digit = event.ctrlKey || event.altKey || event.metaKey
+    ? null
+    : keyboardDigitFromEvent(event);
+  if (context === "errors") {
+    if (digit && clickNumberedKeyboardOption(".keyboard-error-options button", digit)) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (context === "action") {
+    const selector = document.querySelector(".grade-options")
+      ? ".grade-options button"
+      : ".action-options button";
+    if (digit && clickNumberedKeyboardOption(selector, digit)) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (digit !== null) {
+    setKeyboardJerseyBuffer(keyboardJerseyBuffer + digit);
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === "Enter" && confirmKeyboardJersey()) {
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === "Backspace" && keyboardJerseyBuffer) {
+    setKeyboardJerseyBuffer(keyboardJerseyBuffer.slice(0, -1));
+    event.preventDefault();
+    return;
+  }
+
+  if (!event.ctrlKey && !event.altKey && !event.metaKey && key === "l") {
+    const activeLibero = player(state.activeLiberoId);
+    if (!activeLibero || activeLibero.role !== "Líbero") {
+      toast("No hay líbero activo");
+    } else {
+      const control = document.querySelector(
+        `.active-libero-control[data-cmd="player:${activeLibero.id}"]`,
+      );
+      control?.click();
+    }
+    event.preventDefault();
+    return;
+  }
+
+  if (!event.ctrlKey && !event.altKey && !event.metaKey && key === "e") {
+    openKeyboardErrors();
+    event.preventDefault();
+  }
+}
+
+document.addEventListener("keydown", handleMatchKeyboard);
 function statsDialog() {
   const periods = [
     ["all", "Partido completo"],

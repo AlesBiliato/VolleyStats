@@ -2920,3 +2920,173 @@ dialog.stats-dialog {
     grid-template-columns: 1fr;
   }
 }
+
+/* Registro rápido: diálogo táctil amplio y ayudas de teclado discretas. */
+.keyboard-key {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 25px;
+  min-height: 23px;
+  padding: 2px 6px;
+  border: 1px solid #cbd5c5;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: #f7f9f5;
+  color: #52634c;
+  font: 600 11px/1 system-ui, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 #ffffff inset;
+}
+
+.keyboard-jersey-status {
+  position: fixed;
+  top: clamp(72px, 9dvh, 92px);
+  left: 50%;
+  z-index: 4;
+  min-width: 132px;
+  padding: 10px 18px;
+  border: 1px solid #acd2c2;
+  border-radius: 999px;
+  background: #ecf8f3;
+  color: var(--green);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -8px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.keyboard-jersey-status.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#app .errors.error-tools {
+  flex-direction: row;
+}
+
+#app .errors.error-tools button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+#app .keyboard-errors-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+dialog.action-dialog,
+dialog.keyboard-errors-dialog {
+  box-sizing: border-box;
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: clamp(22px, 3vw, 36px);
+  overflow: auto;
+}
+
+.action-dialog .dialog-head h2,
+.keyboard-errors-dialog .dialog-head h2 {
+  font-size: clamp(23px, 2.2vw, 30px);
+}
+
+.action-dialog > p,
+.keyboard-errors-dialog > p {
+  margin: clamp(12px, 2dvh, 20px) 0;
+  font-size: clamp(14px, 1.25vw, 16px);
+}
+
+.action-dialog .action-options,
+.action-dialog .grade-options,
+.keyboard-error-options {
+  display: grid;
+  gap: clamp(10px, 1.4vw, 16px);
+  margin: clamp(14px, 2.4dvh, 24px) 0;
+}
+
+.action-dialog .action-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action-dialog .action-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: clamp(60px, 8dvh, 72px);
+  padding: clamp(14px, 2dvh, 20px) clamp(16px, 2vw, 24px);
+  font-size: clamp(15px, 1.3vw, 18px);
+  font-weight: 650;
+}
+
+.action-dialog .grade-options {
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+}
+
+.action-dialog .grade-options button {
+  position: relative;
+  min-width: 0;
+  min-height: clamp(72px, 11dvh, 92px);
+  gap: 4px;
+  padding: 10px 8px;
+}
+
+.action-dialog .grade-options b {
+  font-size: clamp(29px, 2.7vw, 35px);
+  line-height: 1;
+}
+
+.action-dialog .grade-options span {
+  font-size: clamp(11px, 1vw, 13px);
+  line-height: 1.2;
+}
+
+.action-dialog .grade-options .keyboard-key {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.keyboard-error-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.keyboard-error-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: clamp(58px, 8dvh, 70px);
+  padding: 12px 18px;
+  font-size: clamp(14px, 1.2vw, 17px);
+  text-align: left;
+}
+
+@media (min-width: 1200px) {
+  .action-dialog .action-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  dialog.action-dialog,
+  dialog.keyboard-errors-dialog {
+    width: calc(100vw - 16px);
+    padding: 18px;
+  }
+
+  .action-dialog .action-options,
+  .keyboard-error-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .keyboard-key {
+    display: inline-flex;
+  }
+}
