@@ -541,11 +541,27 @@ try{
    equal(layout,{visible:true,inside:true,overlap:false,horizontalOverflow:false});
   }
  });
+ await check('Controles principales cómodos en tablet y proporcionados en desktop',async()=>{
+  await reset();
+  const selector=['ours','theirs','serve-error','attack-error','unforced-error','sub','stats','undo','history','finish','finish-match','new-match'].map(cmd=>`[data-cmd="${cmd}"]`).join(',');
+  const controls=page.locator(selector);assert.equal(await controls.count(),12);
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const layout=await controls.evaluateAll((buttons,{width,height})=>{const items=buttons.map(button=>{const box=button.getBoundingClientRect(),style=getComputedStyle(button),container=button.closest('.score-panel,.toolbar,.page-heading')?.getBoundingClientRect();return {cmd:button.dataset.cmd,width:box.width,height:box.height,fontSize:parseFloat(style.fontSize),paddingTop:parseFloat(style.paddingTop),paddingBottom:parseFloat(style.paddingBottom),visible:box.width>0&&box.height>0,viewport:box.left>=-1&&box.top>=-1&&box.right<=width+1&&box.bottom<=height+1,container:!container||(box.left>=container.left-1&&box.top>=container.top-1&&box.right<=container.right+1&&box.bottom<=container.bottom+1)};});return {items,horizontalOverflow:document.documentElement.scrollWidth>width,verticalOverflow:document.documentElement.scrollHeight>height};},{width,height});
+   for(const item of layout.items){assert.equal(item.visible,true,item.cmd+' visible');assert.equal(item.viewport,true,item.cmd+' dentro del viewport');assert.equal(item.container,true,item.cmd+' dentro de su panel');assert(item.height>=47.5,item.cmd+' área táctil');assert(item.fontSize>=12,item.cmd+' texto legible');assert(item.paddingTop>=8&&item.paddingBottom>=8,item.cmd+' padding suficiente');if(width>=1280)assert(item.height<=66,item.cmd+' proporcionado en desktop');}
+   assert.equal(layout.horizontalOverflow,false);assert.equal(layout.verticalOverflow,false);
+  }
+  for(const [width,height] of [[1024,600],[1366,640]]){
+   await page.setViewportSize({width,height});
+   const compact=await page.evaluate(()=>({setResultsFont:parseFloat(getComputedStyle(document.querySelector('.set-results')).fontSize),errors:[...document.querySelectorAll('.errors button')].map(button=>button.getBoundingClientRect().height),finish:[...document.querySelectorAll('.match-end-actions button')].map(button=>button.getBoundingClientRect().height)}));
+   assert(compact.setResultsFont>=11,`${width}x${height} resultados legibles`);for(const value of [...compact.errors,...compact.finish])assert(value>=43.5,`${width}x${height} control táctil`);
+  }
+ });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);
   for(const [width,height] of [[1024,600],[1280,800],[1024,768],[1180,720],[800,1280],[768,1024],[600,960],[1366,640]]){
    await page.setViewportSize({width,height});
-   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(id);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth)failures.push('page overflow');return failures});equal(failures,[]);
+   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(id);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth)failures.push('page overflow');return failures});assert.deepEqual(failures,[],`${width}x${height}`);
    for(const cmd of ['sub','stats','history','unforced-error']){await tap(cmd);const r=await page.locator('#modal').boundingBox();assert(r.y>=0&&r.y+r.height<=height+1);await tap('close');}
   }
  });
