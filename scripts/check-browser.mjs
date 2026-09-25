@@ -43,6 +43,81 @@ async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
 try{
+ await check('Cuenta mantiene VolleyStats local cuando cloud no está configurado',async()=>{
+  await page.goto(url);
+  await page.evaluate(()=>localStorage.clear());
+  await page.reload();
+  await tap('account');
+  await page.locator('#modal').getByText('Cloud no configurado').waitFor();
+  assert.match(await page.locator('#modal').innerText(),/continúa funcionando y guardando los datos en este dispositivo/);
+  assert.equal(await state(),null);
+  await tap('close');
+  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+ });
+
+ await check('Cuenta gestiona sesión y errores con Auth simulado sin red',async()=>{
+  const authPage=await context.newPage();
+  authPage.on('pageerror',e=>errors.push(e.message));
+  await authPage.addInitScript(()=>{
+   globalThis.VOLLEYSTATS_CLOUD_CONFIG={
+    SUPABASE_URL:'https://volleystats-test.supabase.co',
+    SUPABASE_PUBLISHABLE_KEY:'sb_publishable_browser-test',
+   };
+   globalThis.VOLLEYSTATS_CLOUD_CLIENT_FACTORY=()=>{
+    let listener=()=>{};
+    const readSession=()=>{
+     const email=localStorage.getItem('volleystats.mock-auth-email');
+     return email?{user:{email},access_token:'mock-token'}:null;
+    };
+    return {auth:{
+     async getSession(){return {data:{session:readSession()},error:null};},
+     onAuthStateChange(callback){listener=callback;return {data:{subscription:{unsubscribe(){}}}};},
+     async signInWithPassword({email,password}){
+      if(password==='incorrecta')return {data:null,error:{code:'invalid_credentials',message:'Invalid login credentials'}};
+      if(password==='fallo-red')throw new TypeError('Failed to fetch');
+      localStorage.setItem('volleystats.mock-auth-email',email);
+      const session=readSession();listener('SIGNED_IN',session);
+      return {data:{session},error:null};
+     },
+     async signUp(){return {data:{session:null},error:null};},
+     async signOut(){localStorage.removeItem('volleystats.mock-auth-email');listener('SIGNED_OUT',null);return {error:null};},
+    }};
+   };
+  });
+  try{
+   await authPage.goto(url);
+   await authPage.evaluate(()=>localStorage.setItem('volleystats.auth-local-sentinel','sin cambios'));
+   await authPage.locator('[data-cmd="account"]').first().click();
+   await authPage.locator('#account-form').waitFor();
+   assert.match(await authPage.locator('#modal').innerText(),/Iniciar sesión/);
+   assert.match(await authPage.locator('#modal').innerText(),/Crear cuenta/);
+
+   await authPage.locator('[name="email"]').fill('coach@example.com');
+   await authPage.locator('[name="password"]').fill('incorrecta');
+   await authPage.locator('#account-form button[type="submit"]').click();
+   await authPage.getByText('Email o contraseña incorrectos.').waitFor();
+
+   await authPage.locator('[name="email"]').fill('coach@example.com');
+   await authPage.locator('[name="password"]').fill('fallo-red');
+   await authPage.locator('#account-form button[type="submit"]').click();
+   await authPage.getByText(/datos locales siguen disponibles/).waitFor();
+   assert.equal(await authPage.evaluate(()=>localStorage.getItem('volleystats.auth-local-sentinel')),'sin cambios');
+
+   await authPage.locator('[name="email"]').fill('coach@example.com');
+   await authPage.locator('[name="password"]').fill('correcta');
+   await authPage.locator('#account-form button[type="submit"]').click();
+   await authPage.getByText('coach@example.com').waitFor();
+   assert.equal(await authPage.locator('[data-cmd="auth-sign-out"]').count(),1);
+
+   await authPage.reload();
+   await authPage.locator('[data-cmd="account"]').first().click();
+   await authPage.getByText('coach@example.com').waitFor();
+   await authPage.locator('[data-cmd="auth-sign-out"]').click();
+   await authPage.locator('#account-form').waitFor();
+   assert.equal(await authPage.locator('[data-cmd="auth-sign-out"]').count(),0);
+  }finally{await authPage.close();}
+ });
+
  await check('Primera entrada, multiples plantillas y datos basicos del partido',async()=>{
   await page.goto(url);
   await page.evaluate(()=>localStorage.clear());

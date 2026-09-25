@@ -852,6 +852,42 @@ dialog p {
   gap: 9px;
   margin-top: 24px;
 }
+.account-panel {
+  margin-top: 16px;
+}
+.account-panel form {
+  margin-top: 18px;
+}
+.account-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #f0f2ed;
+  color: #66766d;
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-status.cloud-ready {
+  background: #e4f1ea;
+  color: var(--green);
+}
+.account-email {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 17px;
+}
+.account-feedback {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eaf3ed;
+  color: var(--green);
+}
+.account-feedback.account-error {
+  background: #fff0ed;
+  color: #9a3528;
+}
 .action-options,
 .grade-options {
   display: flex;
