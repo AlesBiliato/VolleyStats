@@ -152,8 +152,7 @@ function eventChangedScore(event) {
     (event.before[0] !== event.after[0] || event.before[1] !== event.after[1])
   );
 }
-function receptionPending(match) {
-  if (match.status !== "playing" || match.serving) return false;
+function currentRallyEvents(match) {
   let rallyStart = 0;
   for (let index = match.events.length - 1; index >= 0; index--) {
     const event = match.events[index];
@@ -162,11 +161,19 @@ function receptionPending(match) {
       break;
     }
   }
-  return !match.events
-    .slice(rallyStart)
-    .some(
-      (event) => event.type === "action" && event.action === "Recepción",
-    );
+  return match.events.slice(rallyStart);
+}
+function receptionPending(match) {
+  if (match.status !== "playing" || match.serving) return false;
+  return !currentRallyEvents(match).some(
+    (event) => event.type === "action" && event.action === "Recepción",
+  );
+}
+function servePending(match) {
+  if (match.status !== "playing" || !match.serving) return false;
+  return !currentRallyEvents(match).some(
+    (event) => event.type === "action" && event.action === "Saque",
+  );
 }
 const keyboardErrorOptions = [
   ["serve-error", "Error saque rival"],
@@ -1432,11 +1439,13 @@ function actionDialog() {
   const p = player(selected);
   if (!p) return;
   const activeLiberoSelected = isActiveLibero(selected);
+  const canServe = servePending(state);
   const canReceive = receptionPending(state);
-  const showActionOptions = !activeLiberoSelected && action !== "Recepción";
+  const showActionOptions =
+    !activeLiberoSelected && !["Recepción", "Saque"].includes(action);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${showActionOptions ? `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "", a === "Recepción" && !canReceive)).join("")}</div>` : ""}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${showActionOptions ? `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "", (a === "Saque" && !canServe) || (a === "Recepción" && !canReceive))).join("")}</div>` : ""}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
     "action",
   );
 }
@@ -1448,12 +1457,13 @@ function selectMatchPlayer(id) {
   ) return false;
   clearKeyboardJerseyBuffer();
   const canReceive = receptionPending(state);
+  const canServe = servePending(state);
   if (isActiveLibero(id) && !canReceive) {
     toast("Recepción no disponible en este momento");
     return true;
   }
   selected = id;
-  action = canReceive ? "Recepción" : null;
+  action = canReceive ? "Recepción" : canServe ? "Saque" : null;
   actionDialog();
   return true;
 }
@@ -2494,6 +2504,7 @@ document.addEventListener("click", (e) => {
   }
   if (cmd === "action") {
     if (value === "Recepción" && !receptionPending(state)) return;
+    if (value === "Saque" && !servePending(state)) return;
     action = value;
     actionDialog();
     return;
