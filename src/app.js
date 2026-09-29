@@ -114,17 +114,6 @@ let page = hasMatch && state.demo ? "setup" : "match",
   lastTap = 0;
 const app = document.querySelector("#app"),
   modal = document.querySelector("#modal");
-let accountController = {
-  getState: () => ({
-    status: "loading",
-    configured: false,
-    loading: true,
-    busy: false,
-    session: null,
-    message: "",
-    error: "",
-  }),
-};
 modal.addEventListener("close", () => {
   if (modal.dataset.context === "action") {
     selected = null;
@@ -196,7 +185,6 @@ const keyboardErrorOptions = [
 ];
 const button = (label, cmd, cls = "", disabled = false) =>
   `<button class="${cls}" data-cmd="${cmd}" ${disabled ? "disabled" : ""}>${label}</button>`;
-const accountNavButton = () => button("Cuenta", "account", "account-trigger");
 const keyboardKey = (label) =>
   `<kbd class="keyboard-key" aria-hidden="true">${label}</kbd>`;
 function updateKeyboardJerseyStatus() {
@@ -310,46 +298,6 @@ function show(title, body, context = "") {
   modal.dataset.context = context;
   modal.innerHTML = `<div class="dialog-head"><div><span class="eyebrow">VOLLEYSTATS</span><h2>${title}</h2></div>${button("✕", "close", "icon")}</div>${body}`;
   if (!modal.open) modal.showModal();
-}
-
-function accountBody() {
-  const account = accountController.getState();
-  const feedback = account.error
-    ? `<p class="account-feedback account-error" role="alert">${esc(account.error)}</p>`
-    : account.message
-      ? `<p class="account-feedback" role="status">${esc(account.message)}</p>`
-      : "";
-  if (account.loading)
-    return '<div class="account-panel"><p>Comprobando sesión…</p></div>';
-  if (!account.configured) {
-    const title =
-      account.status === "sdk-unavailable"
-        ? "Cloud no disponible"
-        : "Cloud no configurado";
-    return `<div class="account-panel"><span class="account-status">${title}</span><p>VolleyStats continúa funcionando y guardando los datos en este dispositivo.</p><p class="muted">Configura la URL del proyecto y su publishable key para habilitar las cuentas.</p></div>`;
-  }
-  if (account.session?.user) {
-    return `<div class="account-panel"><span class="account-status cloud-ready">Sesión activa</span><p>Has iniciado sesión como:</p><strong class="account-email">${esc(account.session.user.email || "Usuario Supabase")}</strong>${feedback}<div class="dialog-actions">${button("Cerrar sesión", "auth-sign-out", "danger", account.busy)}</div><p class="muted">La sincronización de plantillas y partidos se añadirá en una fase posterior. Por ahora los datos siguen siendo locales.</p></div>`;
-  }
-  return `<div class="account-panel"><span class="account-status cloud-ready">Cloud disponible</span><p>La cuenta prepara tu identidad para la futura sincronización. Tus datos deportivos siguen guardándose localmente.</p><form id="account-form"><label>Email<input type="email" name="email" autocomplete="username" required /></label><label>Contraseña<input type="password" name="password" autocomplete="current-password" minlength="6" required /></label>${feedback}<div class="dialog-actions"><button class="primary" type="submit" ${account.busy ? "disabled" : ""}>Iniciar sesión</button><button type="button" data-cmd="auth-sign-up" ${account.busy ? "disabled" : ""}>Crear cuenta</button></div></form></div>`;
-}
-
-function showAccountDialog() {
-  show("Cuenta", accountBody(), "account");
-}
-
-function refreshAccountDialog() {
-  if (modal.open && modal.dataset.context === "account") showAccountDialog();
-}
-
-function accountCredentials() {
-  const form = document.querySelector("#account-form");
-  if (!form || !form.reportValidity()) return null;
-  const data = new FormData(form);
-  return {
-    email: String(data.get("email") || "").trim(),
-    password: String(data.get("password") || ""),
-  };
 }
 
 function openKeyboardErrors() {
@@ -1031,8 +979,6 @@ function renderSetup() {
           <span class="brand-mark">V</span>Volley<span>Stats</span>
         </a>
 
-        <nav>${accountNavButton()}</nav>
-
         <div class="save-state">
           <i></i>
           ${storageError ? "Guardado no disponible" : "Plantilla sin guardar"}
@@ -1121,7 +1067,6 @@ function renderSetup() {
       <a class="brand" href="#" data-cmd="nav:match">
         <span class="brand-mark">V</span>Volley<span>Stats</span>
       </a>
-      <nav>${accountNavButton()}</nav>
       <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Borrador local"}</div>
     </header>
     <main class="setup-stage setup-stage-${setupStep}">
@@ -1235,8 +1180,6 @@ function renderRosterSelector() {
         <span class="brand-mark">V</span>Volley<span>Stats</span>
       </a>
 
-      <nav>${accountNavButton()}</nav>
-
       <div class="save-state">
         <i></i>
         ${storageError ? "Guardado no disponible" : "Guardado en este dispositivo"}
@@ -1319,7 +1262,6 @@ function render() {
         ${button("Partido", "nav:match", page === "match" ? "active" : "")}
         ${button("Historial", "nav:history", page === "history" ? "active" : "")}
         ${button("Plantilla", "nav:roster", page === "roster" ? "active" : "")}
-        ${accountNavButton()}
       </nav>
 
       <div class="save-state">
@@ -2043,23 +1985,6 @@ document.addEventListener("click", (e) => {
       console.error("No se pudo generar el PDF", error);
       toast("No se pudo generar el PDF");
     }
-    return;
-  }
-  if (cmd === "account") {
-    showAccountDialog();
-    return;
-  }
-  if (cmd === "auth-sign-up") {
-    const credentials = accountCredentials();
-    if (credentials)
-      void accountController.signUp(
-        credentials.email,
-        credentials.password,
-      );
-    return;
-  }
-  if (cmd === "auth-sign-out") {
-    void accountController.signOut();
     return;
   }
   if (cmd === "close") {
@@ -3146,17 +3071,6 @@ document.addEventListener(
       return;
     }
 
-    if (form.id === "account-form") {
-      e.preventDefault();
-      const credentials = accountCredentials();
-      if (credentials)
-        void accountController.signIn(
-          credentials.email,
-          credentials.password,
-        );
-      return;
-    }
-
     if (form.id !== "edit-form") return;
 
     e.preventDefault();
@@ -3227,25 +3141,6 @@ document.addEventListener(
 window.addEventListener("online", render);
 window.addEventListener("offline", render);
 render();
-void import("./cloud.js")
-  .then(({ cloudAuth, createAccountController }) => {
-    accountController = createAccountController(cloudAuth, refreshAccountDialog);
-    return accountController.initialize();
-  })
-  .catch(() => {
-    accountController = {
-      getState: () => ({
-        status: "sdk-unavailable",
-        configured: false,
-        loading: false,
-        busy: false,
-        session: null,
-        message: "",
-        error: "",
-      }),
-    };
-    refreshAccountDialog();
-  });
 if ("serviceWorker" in navigator)
   navigator.serviceWorker
     .register("./sw.js")
