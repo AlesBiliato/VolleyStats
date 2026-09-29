@@ -974,6 +974,24 @@ function captureMatchBasicsDraft() {
   };
 }
 
+function rosterPlayerCard(rosterPlayer) {
+  return `
+    <article class="${rosterPlayer.role === "Líbero" ? "libero-player" : ""}" data-player-id="${rosterPlayer.id}">
+      <b>${rosterPlayer.id}</b>
+
+      <div class="roster-player-copy">
+        <h3>${esc(rosterPlayer.name)}</h3>
+        <p>${esc(rosterPlayer.role)}</p>
+      </div>
+
+      <div class="roster-player-actions">
+        ${button("Editar", `edit-roster-player:${rosterPlayer.id}`)}
+        ${button("Eliminar", `delete-roster-player:${rosterPlayer.id}`, "roster-player-delete")}
+      </div>
+    </article>
+  `;
+}
+
 function renderSetup() {
   if (creatingRoster) {
     app.innerHTML = `
@@ -1017,20 +1035,7 @@ function renderSetup() {
               ? `<div class="roster-grid">
                   ${[...teamRoster]
                     .sort((a, b) => a.id - b.id)
-                    .map(
-                      (p) => `
-                        <article class="${p.role === "Líbero" ? "libero-player" : ""}">
-                          <b>${p.id}</b>
-
-                          <div>
-                            <h3>${esc(p.name)}</h3>
-                            <p>${esc(p.role)}</p>
-                          </div>
-
-                          ${button("Editar", `edit-roster-player:${p.id}`)}
-                        </article>
-                      `,
-                    )
+                    .map(rosterPlayerCard)
                     .join("")}
                 </div>`
               : `<p class="muted">
@@ -1338,21 +1343,7 @@ function render() {
                 <div class="roster-grid">
                   ${[...teamRoster]
                     .sort((a, b) => a.id - b.id)
-                    .map(
-                      (p) => `
-                        <article class="${p.role === "Líbero" ? "libero-player" : ""}">
-                          <b>${p.id}</b>
-
-                          <div>
-                            <h3>${esc(p.name)}</h3>
-                            <p>${esc(p.role)}</p>
-                          </div>
-
-                          ${button("Editar", `edit-roster-player:${p.id}`)}
-
-                        </article>
-                      `,
-                    )
+                    .map(rosterPlayerCard)
                     .join("")}
                 </div>
 
@@ -1564,6 +1555,60 @@ function saveRosterPlayer(form, originalId = null) {
       ? `#${id} ${name} actualizado.`
       : `#${id} ${name} a\u00f1adido a la plantilla.`,
   );
+}
+
+function deleteRosterPlayer(id) {
+  const rosterPlayer = teamRoster.find((player) => player.id === id);
+
+  if (!rosterPlayer) {
+    modal.close();
+    toast("El jugador ya no existe en esta plantilla.");
+    return;
+  }
+
+  if (!creatingRoster && teamRoster.length === 1) {
+    toast("La plantilla guardada debe conservar al menos un jugador.");
+    return;
+  }
+
+  const nextRoster = teamRoster.filter((player) => player.id !== id);
+
+  try {
+    if (creatingRoster) {
+      teamRoster = nextRoster;
+    } else if (selectedRosterId) {
+      if (!savedRosters.some((roster) => roster.id === selectedRosterId))
+        throw Error("La plantilla seleccionada ya no existe.");
+
+      const nextSavedRosters = savedRosters.map((roster) =>
+        roster.id === selectedRosterId
+          ? { ...roster, players: structuredClone(nextRoster) }
+          : roster,
+      );
+
+      saveRosters(nextSavedRosters);
+      savedRosters = nextSavedRosters;
+      teamRoster = nextRoster;
+    } else {
+      saveRoster(nextRoster);
+      teamRoster = nextRoster;
+    }
+
+    if (returnToSetupAfterRoster) {
+      sanitizeSetLineupDraft();
+      if (matchDraft?.activeLiberoId === id) matchDraft.activeLiberoId = null;
+    }
+
+    storageError = false;
+  } catch {
+    storageError = true;
+    toast("No se pudo eliminar el jugador.");
+    return;
+  }
+
+  modal.close();
+  render();
+  toast(`#${rosterPlayer.id} ${rosterPlayer.name} eliminado de la plantilla.`);
 }
 
 document.addEventListener("click", (e) => {
@@ -2438,6 +2483,33 @@ document.addEventListener("click", (e) => {
       </form>`,
     );
 
+    return;
+  }
+
+  if (cmd === "delete-roster-player") {
+    const id = Number(value);
+    const rosterPlayer = teamRoster.find((player) => player.id === id);
+
+    if (!rosterPlayer) {
+      toast("No se encontró el jugador.");
+      return;
+    }
+
+    if (!creatingRoster && teamRoster.length === 1) {
+      toast("La plantilla guardada debe conservar al menos un jugador.");
+      return;
+    }
+
+    show(
+      "Eliminar jugador",
+      `<p>¿Seguro que quieres eliminar a <b>#${rosterPlayer.id} ${esc(rosterPlayer.name)}</b> de esta plantilla?</p><p class="muted">Esta acción solo lo eliminará de la plantilla actual. Los partidos anteriores no se modificarán.</p><div class="dialog-actions">${button("Cancelar", "close")}${button("Eliminar jugador", `confirm-delete-roster-player:${rosterPlayer.id}`, "danger")}</div>`,
+      "delete-roster-player",
+    );
+    return;
+  }
+
+  if (cmd === "confirm-delete-roster-player") {
+    deleteRosterPlayer(Number(value));
     return;
   }
 

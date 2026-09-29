@@ -811,6 +811,36 @@ footer b {
   place-items: center;
   font-size: 22px;
 }
+.roster-player-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.roster-player-copy h3,
+.roster-player-copy p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roster-player-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: auto;
+}
+.roster-player-actions button {
+  min-height: 44px;
+  padding: 8px 11px;
+  font-size: 12px;
+}
+.roster-player-delete {
+  border-color: #e5c9c1;
+  background: #fffafa;
+  color: #8a3f32;
+}
+.roster-player-delete:hover {
+  border-color: #d7b4ad;
+  background: #fff3f1;
+}
 .roster-grid h3 {
   font-size: 14px;
   margin: 0;
