@@ -1445,7 +1445,7 @@ function actionDialog() {
     !activeLiberoSelected && !["Recepción", "Saque"].includes(action);
   show(
     `<span class="mini-number">${p.id}</span> ${esc(p.name)}`,
-    `<p>${action ? "Elige la valoración." : "¿Qué acción quieres registrar?"}</p>${showActionOptions ? `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "", (a === "Saque" && !canServe) || (a === "Recepción" && !canReceive))).join("")}</div>` : ""}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
+    `${action ? `<p class="action-rating-context">Valorando: <strong>${esc(action)}</strong></p>` : "<p>¿Qué acción quieres registrar?</p>"}${showActionOptions ? `<div class="action-options">${Object.keys(grades).map((a, index) => button(`<span>${a}</span>${keyboardKey(index + 1)}`, "action:" + a, action === a ? "primary" : "", (a === "Saque" && !canServe) || (a === "Recepción" && !canReceive))).join("")}</div>` : ""}${action ? `<div class="grade-options">${grades[action].map((g, index) => button(`<b>${gradeLabel(action, g)}</b><span>${gradeDescription(action, g)}</span>${keyboardKey(index + 1)}`, "grade:" + g)).join("")}</div><p class="muted">Los puntos directos y errores actualizan el marcador.</p>` : ""}`,
     "action",
   );
 }

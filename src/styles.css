@@ -3422,6 +3422,22 @@ dialog.keyboard-errors-dialog {
   font-size: clamp(14px, 1.25vw, 16px);
 }
 
+.action-dialog .action-rating-context {
+  margin: clamp(12px, 2dvh, 20px) 0;
+  padding: 10px 14px;
+  border-left: 4px solid var(--green);
+  border-radius: 8px;
+  background: #edf5ef;
+  color: #294233;
+  font-size: clamp(15px, 1.35vw, 18px);
+  line-height: 1.3;
+}
+
+.action-dialog .action-rating-context strong {
+  color: var(--green);
+  font-weight: 800;
+}
+
 .action-dialog .action-options,
 .action-dialog .grade-options,
 .keyboard-error-options {
