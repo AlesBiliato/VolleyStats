@@ -132,6 +132,9 @@ const esc = (s) =>
         c
       ],
   );
+function brandLink(command = "") {
+  return `<a class="brand" href="#"${command ? ` data-cmd="${command}"` : ""}><img class="brand-logo" src="./src/assets/logo.png" alt="VolleyStats" width="1254" height="1254"><span class="brand-name" aria-hidden="true">Volley<span>Stats</span></span></a>`;
+}
 const player = (id) => state.roster.find((p) => p.id === id);
 function rosterNameForMatch(match) {
   return resolveRosterName(match, savedRosters);
@@ -975,9 +978,7 @@ function renderSetup() {
   if (creatingRoster) {
     app.innerHTML = `
       <header>
-        <a class="brand" href="#">
-          <span class="brand-mark">V</span>Volley<span>Stats</span>
-        </a>
+        ${brandLink()}
 
         <div class="save-state">
           <i></i>
@@ -1064,9 +1065,7 @@ function renderSetup() {
 
   app.innerHTML = `
     <header>
-      <a class="brand" href="#" data-cmd="nav:match">
-        <span class="brand-mark">V</span>Volley<span>Stats</span>
-      </a>
+      ${brandLink("nav:match")}
       <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Borrador local"}</div>
     </header>
     <main class="setup-stage setup-stage-${setupStep}">
@@ -1176,9 +1175,7 @@ document.addEventListener("submit", e => {
 function renderRosterSelector() {
   app.innerHTML = `
     <header>
-      <a class="brand" href="#">
-        <span class="brand-mark">V</span>Volley<span>Stats</span>
-      </a>
+      ${brandLink()}
 
       <div class="save-state">
         <i></i>
@@ -1254,9 +1251,7 @@ function render() {
   }
   app.innerHTML = `
     <header>
-      <a class="brand" href="#" data-cmd="nav:match">
-        <span class="brand-mark">V</span>Volley<span>Stats</span>
-      </a>
+      ${brandLink("nav:match")}
 
       <nav>
         ${button("Partido", "nav:match", page === "match" ? "active" : "")}

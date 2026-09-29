@@ -6,7 +6,7 @@ import {pathToFileURL} from 'node:url';
 import {initial,transition} from '../src/domain.js';
 const {chromium}=await import(process.argv[2]?pathToFileURL(process.argv[2]).href:'playwright');
 const root=path.resolve(new URL('..',import.meta.url).pathname.replace(/^\/(\w:)/,'$1'));
-const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
+const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
 const server=createServer(async(req,res)=>{try{const name=new URL(req.url,'http://local').pathname;const file=path.resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+path.sep))throw Error();res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.setHeader('Cache-Control','no-cache');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
@@ -43,6 +43,12 @@ async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
 try{
+ await check('Logo oficial accesible y contenido en cabecera',async()=>{
+  await page.goto(url);await page.evaluate(()=>localStorage.clear());await page.reload();await page.locator('.brand-logo').waitFor();
+  assert.equal(await page.locator('.brand-logo').getAttribute('alt'),'VolleyStats');assert.match(await page.locator('.brand-logo').getAttribute('src'),/src\/assets\/logo\.png$/);assert.deepEqual(await page.locator('.brand-logo').evaluate(image=>({complete:image.complete,width:image.naturalWidth,height:image.naturalHeight})),{complete:true,width:1254,height:1254});
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){await page.setViewportSize({width,height});const layout=await page.evaluate(()=>{const header=document.querySelector('#app > header').getBoundingClientRect(),logo=document.querySelector('.brand-logo').getBoundingClientRect();return {headerInside:header.left>=0&&header.right<=innerWidth+1&&header.top>=0&&header.bottom<=innerHeight+1,logoInside:logo.left>=header.left-1&&logo.right<=header.right+1&&logo.top>=header.top-1&&logo.bottom<=header.bottom+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,ratio:logo.width/logo.height};});assert.equal(layout.headerInside,true,`${width}x${height} cabecera visible`);assert.equal(layout.logoInside,true,`${width}x${height} logo dentro de cabecera`);assert.equal(layout.pageOverflow,false,`${width}x${height} sin overflow horizontal`);assert(Math.abs(layout.ratio-1)<0.01,`${width}x${height} logo sin deformar`);}
+  await page.setViewportSize({width:1024,height:600});
+ });
  await check('Primera entrada, multiples plantillas y datos basicos del partido',async()=>{
   await page.goto(url);
   await page.evaluate(()=>localStorage.clear());
@@ -769,7 +775,7 @@ try{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);
   for(const [width,height] of [[1024,600],[1280,800],[1024,768],[1180,720],[800,1280],[768,1024],[600,960],[1366,640]]){
    await page.setViewportSize({width,height});
-   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(id);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth)failures.push('page overflow');return failures});assert.deepEqual(failures,[],`${width}x${height}`);
+   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .brand-logo,#app > header,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className||el.tagName;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(id);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth)failures.push('page overflow');return failures});assert.deepEqual(failures,[],`${width}x${height}`);
    for(const cmd of ['sub','stats','history','unforced-error']){await tap(cmd);const r=await page.locator('#modal').boundingBox();assert(r.y>=0&&r.y+r.height<=height+1);await tap('close');}
   }
  });
