@@ -6,6 +6,7 @@ const COLORS = {
   greenSoft: [230, 238, 232],
   greenPale: [246, 249, 246],
   line: [202, 216, 207],
+  groupLine: [103, 137, 120],
   muted: [101, 119, 110],
   white: [255, 255, 255],
 };
@@ -168,6 +169,14 @@ export function renderMatchPdf(report, dependencies) {
   };
   const drawGeneral = (period) => {
     sectionTitle("General");
+    let nextGroupColumn = 1;
+    const groupStartColumns = new Set(
+      period.general.groups.map((group) => {
+        const start = nextGroupColumn;
+        nextGroupColumn += group.columns.length;
+        return start;
+      }),
+    );
     const groupHead = [
       { content: "JUGADOR", rowSpan: 2, styles: { halign: "left" } },
       ...period.general.groups.map((group) => ({
@@ -177,7 +186,7 @@ export function renderMatchPdf(report, dependencies) {
     ];
     const columnHead = period.general.groups.flatMap((group) => group.columns);
     const body = period.general.rows.map((player) => [
-      `#${player.id} ${player.name} · ${player.role}`,
+      `#${player.id} ${player.name}`,
       ...generalValues(player.metrics),
     ]);
     const foot = [[
@@ -199,9 +208,18 @@ export function renderMatchPdf(report, dependencies) {
         fontStyle: "bold",
       },
       columnStyles: { 0: { halign: "left", cellWidth: 34 } },
+      didDrawCell: ({ cell, column, section }) => {
+        if (!groupStartColumns.has(column.index)) return;
+        doc.setDrawColor(
+          ...(section === "head" ? COLORS.white : COLORS.groupLine),
+        );
+        doc.setLineWidth(section === "head" ? 0.6 : 0.45);
+        doc.line(cell.x, cell.y, cell.x, cell.y + cell.height);
+      },
     });
   };
-  const drawPhaseAndRotation = (period) => {
+  const drawPhaseAndRotation = (period, startOnNewPage = false) => {
+    if (startOnNewPage) addPage();
     sectionTitle("K1 / K2");
     table({
       head: [["Fase", "Contexto", "Puntos disputados", "A favor", "En contra", "% ganados"]],
@@ -308,7 +326,7 @@ export function renderMatchPdf(report, dependencies) {
       : "Estadísticas agregadas de todos los registros del encuentro";
     sectionTitle(period.label, subtitle);
     drawGeneral(period);
-    drawPhaseAndRotation(period);
+    drawPhaseAndRotation(period, index === 0);
     drawErrors(period);
   });
 

@@ -560,6 +560,7 @@ try{
   const bytes=await readFile(downloadedPath);
   assert(bytes.length>1000);
   assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
+  assert.match(bytes.toString('latin1'),/\/MediaBox\s*\[\s*0\s+0\s+841(?:\.\d+)?\s+595(?:\.\d+)?\s*\]/);
 
   await tap('history');
   assert.equal(await page.locator('#modal [data-cmd="generate-pdf"]').count(),1);

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initial, transition } from "../src/domain.js";
-import { buildMatchReport } from "../src/report.js";
+import { renderMatchPdf } from "../src/pdf-report.js";
+import { buildMatchReport, generalGroups } from "../src/report.js";
 import { statistics } from "../src/statistics.js";
 
 const action = (player, name, grade) => ({
@@ -55,6 +56,47 @@ function finishedSample() {
   ]);
 }
 
+function renderProbe(report) {
+  const calls = [];
+  let options;
+  class PdfProbe {
+    constructor(receivedOptions) {
+      options = receivedOptions;
+      this.page = 1;
+      this.lastAutoTable = { finalY: 20 };
+      this.internal = {
+        pageSize: {
+          getWidth: () => 297,
+          getHeight: () => 210,
+        },
+      };
+    }
+    setProperties() {}
+    setLanguage() {}
+    setTextColor() {}
+    setFont() {}
+    setFontSize() {}
+    setDrawColor(...color) { calls.push({ type: "draw-color", color }); }
+    setLineWidth(width) { calls.push({ type: "line-width", width }); }
+    line(...coordinates) { calls.push({ type: "line", coordinates }); }
+    text() {}
+    addPage(...pageOptions) {
+      this.page += 1;
+      calls.push({ type: "add-page", page: this.page, pageOptions });
+    }
+    getNumberOfPages() { return this.page; }
+    setPage(page) { this.page = page; }
+  }
+  const tables = [];
+  const autoTable = (doc, tableOptions) => {
+    tables.push({ page: doc.page, options: tableOptions });
+    calls.push({ type: "table", page: doc.page, options: tableOptions });
+    doc.lastAutoTable = { finalY: 60 };
+  };
+  const document = renderMatchPdf(report, { jsPDF: PdfProbe, autoTable });
+  return { calls, document, options, tables };
+}
+
 test("cabecera local conserva plantilla, rival, sede y metadatos", () => {
   const report = buildMatchReport(finishedSample());
   assert.deepEqual(report.header, {
@@ -100,6 +142,85 @@ test("General conserva la salida canónica de statistics.js", () => {
   assert.equal(row.metrics.points, source.points);
   assert.equal(row.metrics.gp, source.gp);
   assert.equal(row.metrics.attack, source.attack);
+});
+
+test("PDF conserva A4 landscape y General muestra dorsal y nombre sin rol", () => {
+  const report = buildMatchReport(finishedSample());
+  const rendered = renderProbe(report);
+  assert.deepEqual(rendered.options, {
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+    compress: true,
+  });
+  for (const { pageOptions } of rendered.calls.filter(
+    ({ type }) => type === "add-page",
+  )) {
+    assert.deepEqual(pageOptions, ["a4", "landscape"]);
+  }
+  const generalTable = rendered.tables.find(
+    ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
+  ).options;
+  const labels = new Map(
+    generalTable.body.map(([label]) => [Number(label.match(/^#(\d+)/)?.[1]), label]),
+  );
+  for (const player of report.periods[0].general.rows) {
+    assert.equal(labels.get(player.id), `#${player.id} ${player.name}`);
+  }
+});
+
+test("General conserva grupos, métricas y separadores semánticos", () => {
+  const report = buildMatchReport(finishedSample());
+  const { calls, tables } = renderProbe(report);
+  const generalTable = tables.find(
+    ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
+  ).options;
+  assert.deepEqual(
+    generalTable.head[0].slice(1).map(({ content }) => content),
+    ["PUNTOS", "SAQUE", "RECEPCIÓN", "ATAQUE", "BLOQUEO"],
+  );
+  assert.deepEqual(generalTable.head[1], generalGroups.flatMap(({ columns }) => columns));
+  assert.equal(generalTable.head[1].length, 17);
+  assert.equal(generalTable.body[0].length, 18);
+  assert.equal(generalTable.foot[0].length, 18);
+
+  const linesBeforeHooks = calls.filter(({ type }) => type === "line").length;
+  let columnIndex = 1;
+  for (const group of generalGroups) {
+    generalTable.didDrawCell({
+      cell: { x: columnIndex * 10, y: 20, height: 6 },
+      column: { index: columnIndex },
+      section: "body",
+    });
+    columnIndex += group.columns.length;
+  }
+  for (const section of ["head", "foot"]) {
+    generalTable.didDrawCell({
+      cell: { x: 10, y: 20, height: 6 },
+      column: { index: 1 },
+      section,
+    });
+  }
+  assert.equal(
+    calls.filter(({ type }) => type === "line").length - linesBeforeHooks,
+    7,
+  );
+});
+
+test("K1/K2 general comienza en página nueva después de General", () => {
+  const { calls } = renderProbe(buildMatchReport(finishedSample()));
+  const generalIndex = calls.findIndex(
+    ({ type, options }) =>
+      type === "table" && options.head?.[0]?.[0]?.content === "JUGADOR",
+  );
+  const phaseIndex = calls.findIndex(
+    ({ type, options }) => type === "table" && options.head?.[0]?.[0] === "Fase",
+  );
+  const pageBreaks = calls
+    .slice(generalIndex + 1, phaseIndex)
+    .filter(({ type }) => type === "add-page");
+  assert.equal(pageBreaks.length, 1);
+  assert.equal(calls[generalIndex].page + 1, calls[phaseIndex].page);
 });
 
 test("G-P mantiene puntos terminales menos pérdidas atribuibles", () => {
