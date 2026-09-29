@@ -298,6 +298,67 @@ test("K1 y K2 coinciden con statistics.js", () => {
   }
 });
 
+test("report transporta las 12 rotaciones por fase canónicas en partido y sets", () => {
+  const state = finishedSample();
+  const report = buildMatchReport(state);
+  for (const period of report.periods) {
+    const canonical = statistics(state, period.key).rotationPhases;
+    assert.equal(period.rotationPhases.length, 12);
+    assert.deepEqual(period.rotationPhases, canonical);
+    for (const rotation of period.rotations) {
+      const split = period.rotationPhases.filter(
+        (group) => group.name === rotation.name,
+      );
+      assert.equal(
+        split.reduce((sum, group) => sum + group.played, 0),
+        rotation.won + rotation.lost,
+      );
+      assert.equal(
+        split.reduce((sum, group) => sum + group.won, 0),
+        rotation.won,
+      );
+      assert.equal(
+        split.reduce((sum, group) => sum + group.lost, 0),
+        rotation.lost,
+      );
+    }
+    for (const phase of period.phases) {
+      const split = period.rotationPhases.filter(
+        (group) => group.phase === phase.name,
+      );
+      assert.equal(
+        split.reduce((sum, group) => sum + group.played, 0),
+        phase.played,
+      );
+      assert.equal(split.reduce((sum, group) => sum + group.won, 0), phase.won);
+      assert.equal(split.reduce((sum, group) => sum + group.lost, 0), phase.lost);
+    }
+  }
+});
+
+test("PDF recibe el desglose R1-K1 a R6-K2 sin recalcularlo", () => {
+  const report = buildMatchReport(finishedSample());
+  const { tables } = renderProbe(report);
+  const rotationPhaseTable = tables.find(
+    ({ options }) =>
+      options.head?.[0]?.join("|") ===
+      "Rotación|Fase|Puntos disputados|A favor|En contra|Balance|% ganados",
+  ).options;
+  assert.equal(rotationPhaseTable.body.length, 12);
+  assert.deepEqual(
+    rotationPhaseTable.body,
+    report.periods[0].rotationPhases.map((group) => [
+      group.name,
+      group.phase,
+      group.played,
+      group.won,
+      group.lost,
+      group.balance,
+      group.wonPercent === "—" ? "-" : group.wonPercent,
+    ]),
+  );
+});
+
 test("incluye R1-R6 aunque una rotación no tenga eventos", () => {
   const rotations = buildMatchReport(finishedSample()).periods[0].rotations;
   assert.deepEqual(rotations.map(({ name }) => name), ["R1", "R2", "R3", "R4", "R5", "R6"]);

@@ -2917,6 +2917,22 @@ function statsBody(tab) {
   const groups = s.rotations;
   const won = groups.reduce((n, g) => n + g.won, 0),
     lost = groups.reduce((n, g) => n + g.lost, 0);
+  const rotationPhases = `<section class="rotation-phase-section"><h3>Rotaciones por fase</h3><div class="table-scroll rotation-phase-table"><table><thead><tr>${[
+    "Rotación",
+    "Fase",
+    "Puntos disputados",
+    "A favor",
+    "En contra",
+    "Balance",
+    "% ganados",
+  ]
+    .map((header) => `<th scope="col">${header}</th>`)
+    .join("")}</tr></thead><tbody>${s.rotationPhases
+    .map(
+      (group) =>
+        `<tr class="${group.phase === "K1" ? "rotation-pair-start" : ""}" data-rotation="${group.name}" data-phase="${group.phase}"><td>${group.name}</td><td>${group.phase}</td><td>${group.played}</td><td>${group.won}</td><td>${group.lost}</td><td>${group.balance}</td><td>${group.wonPercent}</td></tr>`,
+    )
+    .join("")}</tbody></table></div></section>`;
   return (
     table(
       ["Rotación", "A favor", "En contra", "Balance", "% ganados"],
@@ -2929,7 +2945,8 @@ function statsBody(tab) {
       ]),
       ["Total", won, lost, won - lost, percent(won, won + lost)],
     ) +
-    `<p class="muted">Porcentaje = puntos a favor / puntos disputados registrados. Se usa la rotación anterior al punto. R1–R6 siguen el contador de rotación del partido.</p>`
+    `<p class="muted">Porcentaje = puntos a favor / puntos disputados registrados. Se usa la rotación anterior al punto. R1–R6 siguen el contador de rotación del partido.</p>` +
+    rotationPhases
   );
 }
 const pointOptions = [

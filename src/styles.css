@@ -1888,6 +1888,38 @@ dialog.stats-dialog {
 .table-scroll {
   overscroll-behavior: contain;
 }
+.rotation-phase-section {
+  margin-top: 24px;
+}
+.rotation-phase-section h3 {
+  margin: 0 0 8px;
+  color: #315a4a;
+  font-size: 16px;
+}
+.rotation-phase-table {
+  margin-top: 8px;
+}
+.rotation-phase-table table {
+  min-width: 620px;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+.rotation-phase-table th,
+.rotation-phase-table td {
+  padding: 8px 6px;
+  text-align: center;
+  white-space: normal;
+}
+.rotation-phase-table td:nth-child(-n + 2) {
+  font-weight: 700;
+}
+.rotation-phase-table tbody tr:nth-child(4n + 1) td,
+.rotation-phase-table tbody tr:nth-child(4n + 2) td {
+  background: #f5f8f4;
+}
+.rotation-phase-table tbody tr.rotation-pair-start:not(:first-child) td {
+  border-top: 2px solid #8aaf9f;
+}
 @media (max-width: 850px) {
   .player-stats table {
     font-size: 10px;

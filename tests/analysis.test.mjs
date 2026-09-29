@@ -5,6 +5,35 @@ import {aggregatePlayerStatistics,statistics,percent} from '../src/statistics.js
 import {loadMatch,saveMatch} from '../src/storage.js';
 const point=(team)=>({type:'point',team,label:'Punto'});
 function play(commands){return commands.reduce(transition,initial());}
+function rotationPhase(stats,rotation,phase){return stats.rotationPhases.find(group=>group.rotation===rotation&&group.phase===phase);}
+function assertRotationPhaseInvariants(stats){
+ for(const rotation of stats.rotations){
+  const number=Number(rotation.name.slice(1)),groups=stats.rotationPhases.filter(group=>group.rotation===number);
+  assert.equal(groups.reduce((sum,group)=>sum+group.played,0),rotation.won+rotation.lost,`${rotation.name} played`);
+  assert.equal(groups.reduce((sum,group)=>sum+group.won,0),rotation.won,`${rotation.name} won`);
+  assert.equal(groups.reduce((sum,group)=>sum+group.lost,0),rotation.lost,`${rotation.name} lost`);
+ }
+ for(const phase of stats.phases){
+  const groups=stats.rotationPhases.filter(group=>group.phase===phase.name);
+  assert.equal(groups.reduce((sum,group)=>sum+group.played,0),phase.won+phase.lost,`${phase.name} played`);
+  assert.equal(groups.reduce((sum,group)=>sum+group.won,0),phase.won,`${phase.name} won`);
+  assert.equal(groups.reduce((sum,group)=>sum+group.lost,0),phase.lost,`${phase.name} lost`);
+ }
+}
+function rotationPhaseSample(){
+ return play([
+  point(0),
+  point(1),
+  point(0),
+  {type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},
+  point(0),
+  {type:'finish',label:'Cierre'},
+  {type:'next',serving:false,label:'Inicio set 2'},
+  point(1),
+  point(0),
+  point(1),
+ ]);
+}
 test('Corregir un punto recalcula saque, rotaciones, sets y metadatos sin alterar original',()=>{
  const s=play([point(0),point(1),point(0),{type:'finish',label:'Cierre'},{type:'next',serving:false,label:'Inicio'},point(0)]);
  const n=correctEvent(s,0,point(1));assert.deepEqual(n.finishedSets[0].score,[1,2]);assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,2);assert.equal(s.rotation,2);
@@ -37,6 +66,65 @@ test('Estadísticas agrupan puntos reales, fases, rotación y set sin contar cie
  const s=play([{type:'action',player:7,action:'Recepción',grade:'#',label:'Recepción'},{type:'action',player:7,action:'Ataque',grade:'#',label:'Ataque'},{type:'action',player:7,action:'Ataque',grade:'Blo',label:'Ataque'}, {type:'point',team:1,category:'unforced-error',reason:'net',label:'Red'},{type:'point',team:1,category:'unforced-error',reason:'other',label:'Otros'},{type:'finish',label:'Cierre'},{type:'next',serving:true,label:'Inicio'},point(0)]);
  const stats=statistics(s);assert.equal(stats.total.won,2);assert.equal(stats.total.lost,3);assert.equal(stats.total.actions,3);assert.equal(stats.unforced,2);assert.equal(stats.netErrors,1);assert.equal(stats.otherErrors,1);
  const p=stats.players.find(p=>p.id===7);assert.equal(p.attack,2);assert.equal(percent(p.kills-p.attackErrors,p.attack),'50 %');assert.equal(percent(p.positiveReception,p.reception),'100 %');assert.equal(percent(0,0),'—');assert.equal(statistics(s,'1').total.won,1);assert.equal(statistics(s,'2').total.actions,0);assert.equal(stats.phases[0].won,1);assert.equal(stats.phases[1].won,1);
+});
+
+test('Rotaciones por fase conserva el contexto previo y las 12 combinaciones',()=>{
+ const state=rotationPhaseSample(),stats=statistics(state);
+ assert.deepEqual(stats.rotationPhases.map(({name,phase})=>`${name}-${phase}`),[
+  'R1-K1','R1-K2','R2-K1','R2-K2','R3-K1','R3-K2',
+  'R4-K1','R4-K2','R5-K1','R5-K2','R6-K1','R6-K2',
+ ]);
+ assert.deepEqual(state.events.slice(0,5).map(({rotation,phase})=>[rotation,phase]),[
+  [1,'K1'],[2,'K2'],[2,'K1'],[3,'K2'],[3,'K2'],
+ ]);
+ assert.deepEqual(rotationPhase(stats,1,'K1'),{rotation:1,name:'R1',phase:'K1',won:2,lost:1,played:3,balance:1,wonPercent:'67 %'});
+ assert.deepEqual(rotationPhase(stats,2,'K1'),{rotation:2,name:'R2',phase:'K1',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
+ assert.deepEqual(rotationPhase(stats,2,'K2'),{rotation:2,name:'R2',phase:'K2',won:0,lost:2,played:2,balance:-2,wonPercent:'0 %'});
+ assert.deepEqual(rotationPhase(stats,3,'K2'),{rotation:3,name:'R3',phase:'K2',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
+ assert.equal(rotationPhase(stats,6,'K1').wonPercent,'—');
+ const neutral=statistics(play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'}]));
+ assert.equal(neutral.rotationPhases.reduce((sum,group)=>sum+group.played,0),0);
+});
+
+test('Rotaciones por fase cumplen invariantes globales y por set',()=>{
+ const state=rotationPhaseSample();
+ for(const period of ['all','1','2'])assertRotationPhaseInvariants(statistics(state,period));
+ const setOne=statistics(state,'1'),setTwo=statistics(state,'2');
+ assert.deepEqual([setOne.total.won,setOne.total.lost],[3,1]);
+ assert.deepEqual([setTwo.total.won,setTwo.total.lost],[1,2]);
+ assert.deepEqual(rotationPhase(setOne,1,'K1'),{rotation:1,name:'R1',phase:'K1',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
+ assert.deepEqual(rotationPhase(setTwo,1,'K1'),{rotation:1,name:'R1',phase:'K1',won:1,lost:1,played:2,balance:0,wonPercent:'50 %'});
+});
+
+test('Partidos legacy recuperan fase y rotación desde los snapshots undo',()=>{
+ const modern=rotationPhaseSample(),legacy=structuredClone(modern);
+ for(const event of legacy.events){delete event.phase;delete event.rotation;}
+ const modernStats=statistics(modern),legacyStats=statistics(legacy);
+ assert.deepEqual(legacyStats.phases,modernStats.phases);
+ assert.deepEqual(legacyStats.rotations,modernStats.rotations);
+ assert.deepEqual(legacyStats.rotationPhases,modernStats.rotationPhases);
+ assertRotationPhaseInvariants(legacyStats);
+ for(const period of ['1','2']){
+  const modernPeriod=statistics(modern,period),legacyPeriod=statistics(legacy,period);
+  assert.deepEqual(legacyPeriod.phases,modernPeriod.phases);
+  assert.deepEqual(legacyPeriod.rotations,modernPeriod.rotations);
+  assert.deepEqual(legacyPeriod.rotationPhases,modernPeriod.rotationPhases);
+  assertRotationPhaseInvariants(legacyPeriod);
+ }
+});
+
+test('El contexto explícito del evento tiene prioridad y no se inventa si falta',()=>{
+ const state=play([point(0)]),explicit=structuredClone(state);
+ explicit.events[0].rotation=6;explicit.events[0].phase='K2';
+ const explicitStats=statistics(explicit);
+ assert.equal(rotationPhase(explicitStats,6,'K2').won,1);
+ assert.equal(rotationPhase(explicitStats,1,'K1').played,0);
+ const unknown=structuredClone(state);delete unknown.events[0].rotation;delete unknown.events[0].phase;unknown.undo=[];
+ const unknownStats=statistics(unknown);
+ assert.equal(unknownStats.total.won,1);
+ assert.equal(unknownStats.phases.reduce((sum,phase)=>sum+phase.won+phase.lost,0),0);
+ assert.equal(unknownStats.rotations.reduce((sum,rotation)=>sum+rotation.won+rotation.lost,0),0);
+ assert.equal(unknownStats.rotationPhases.reduce((sum,group)=>sum+group.played,0),0);
 });
 
 test('Ataque - cuenta como ataque y calidad negativa, no como error de punto',()=>{

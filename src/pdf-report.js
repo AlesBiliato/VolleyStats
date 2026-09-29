@@ -246,6 +246,46 @@ export function renderMatchPdf(report, dependencies) {
       ]),
       columnStyles: { 0: { fontStyle: "bold", halign: "center" } },
     });
+
+    sectionTitle("Rotaciones por fase K1 / K2");
+    table({
+      head: [[
+        "Rotación",
+        "Fase",
+        "Puntos disputados",
+        "A favor",
+        "En contra",
+        "Balance",
+        "% ganados",
+      ]],
+      body: period.rotationPhases.map((group) => [
+        group.name,
+        group.phase,
+        group.played,
+        group.won,
+        group.lost,
+        group.balance,
+        group.wonPercent === "—" ? "-" : group.wonPercent,
+      ]),
+      columnStyles: {
+        0: { fontStyle: "bold", halign: "center" },
+        1: { fontStyle: "bold", halign: "center" },
+      },
+      didParseCell: ({ cell, row, section }) => {
+        if (section !== "body") return;
+        cell.styles.fillColor =
+          Math.floor(row.index / 2) % 2 === 0
+            ? COLORS.greenPale
+            : COLORS.white;
+      },
+      didDrawCell: ({ cell, row, section }) => {
+        if (section !== "body" || row.index === 0 || row.index % 2 !== 0)
+          return;
+        doc.setDrawColor(...COLORS.groupLine);
+        doc.setLineWidth(0.35);
+        doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
+      },
+    });
   };
   const drawErrors = (period) => {
     sectionTitle("Errores");

@@ -81,6 +81,26 @@ export function resolveRosterName(match, rosters = []) {
   return linkedRoster?.name.trim() || "Nuestro equipo";
 }
 
+function resolveEventContext(state, event, index) {
+  const previous = state.undo[index];
+  const rotation =
+    Number.isInteger(event.rotation) && event.rotation >= 1 && event.rotation <= 6
+      ? event.rotation
+      : Number.isInteger(previous?.rotation) &&
+          previous.rotation >= 1 &&
+          previous.rotation <= 6
+        ? previous.rotation
+        : null;
+  const phase = ["K1", "K2"].includes(event.phase)
+    ? event.phase
+    : typeof previous?.serving === "boolean"
+      ? previous.serving
+        ? "K2"
+        : "K1"
+      : null;
+  return { rotation, phase };
+}
+
 export function statistics(state, set = "all") {
   const indexed = state.events
     .map((event, index) => ({ event, index }))
@@ -96,6 +116,15 @@ export function statistics(state, set = "all") {
     name: `R${index + 1}`,
     ...blank(),
   }));
+  const rotationPhases = Array.from({ length: 6 }, (_, index) =>
+    ["K1", "K2"].map((phase) => ({
+      rotation: index + 1,
+      name: `R${index + 1}`,
+      phase,
+      won: 0,
+      lost: 0,
+    })),
+  ).flat();
   const unforcedByReason = new Map(
     unforcedReasons.map(([reason, label]) => [reason, { reason, label, count: 0 }]),
   );
@@ -118,21 +147,31 @@ export function statistics(state, set = "all") {
     });
   }
 
-  for (const { event } of indexed) {
+  for (const { event, index } of indexed) {
     if (event.type === "sub") substitutions++;
     if (!["point", "action"].includes(event.type)) continue;
 
     const won = Math.max(0, event.after[0] - event.before[0]);
     const lost = Math.max(0, event.after[1] - event.before[1]);
+    const context = resolveEventContext(state, event, index);
 
     for (const group of [
       total,
-      phases.find((phase) => phase.name === event.phase),
-      rotations[event.rotation - 1],
+      phases.find((phase) => phase.name === context.phase),
+      rotations[context.rotation - 1],
     ].filter(Boolean)) {
       group.won += won;
       group.lost += lost;
       group.actions += event.type === "action" ? 1 : 0;
+    }
+
+    const rotationPhase = rotationPhases.find(
+      (group) =>
+        group.rotation === context.rotation && group.phase === context.phase,
+    );
+    if (rotationPhase) {
+      rotationPhase.won += won;
+      rotationPhase.lost += lost;
     }
 
     if (event.type === "point" && event.category === "unforced-error") {
@@ -163,7 +202,7 @@ export function statistics(state, set = "all") {
     player.errors += lost;
     const gpLost = event.action === "Bloqueo" ? 0 : lost;
     player.gp += won - gpLost;
-    if (event.phase === "K2" && won) player.breakPoints++;
+    if (context.phase === "K2" && won) player.breakPoints++;
     if (["#", "+"].includes(event.grade)) player.positiveActions++;
     else if (["=", "Blo", "-"].includes(event.grade)) player.negativeActions++;
 
@@ -197,6 +236,15 @@ export function statistics(state, set = "all") {
     players,
     phases,
     rotations,
+    rotationPhases: rotationPhases.map((group) => {
+      const played = group.won + group.lost;
+      return {
+        ...group,
+        played,
+        balance: group.won - group.lost,
+        wonPercent: percent(group.won, played),
+      };
+    }),
     rivalErrors,
     unforced,
     unforcedReasons: unforcedReasonTotals,

@@ -97,6 +97,9 @@ function periodData(match, key, label, setNumber = null) {
       balance: rotation.won - rotation.lost,
       wonPercent: percent(rotation.won, rotation.won + rotation.lost),
     })),
+    rotationPhases: periodStatistics.rotationPhases.map((group) => ({
+      ...group,
+    })),
     errors: {
       rival: [
         {

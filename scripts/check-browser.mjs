@@ -671,6 +671,32 @@ try{
   await tap('history');await tap('edit-event:2');await tap('delete-event:2');await tap('close');equal(await state(),before);
   await tap('history');await tap('edit-event:2');await tap('delete-event:2');await tap('confirm-correction');equal((await state()).score,[1,0]);await tap('history');await tap('undo-correction');equal(await state(),before);
  });
+ await check('Rotaciones por fase muestran R1-K1 a R6-K2 sin overflow',async()=>{
+  const sample=[
+   {type:'point',team:0,label:'Punto'},
+   {type:'point',team:1,label:'Punto'},
+   {type:'point',team:0,label:'Punto'},
+   {type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},
+   {type:'point',team:0,label:'Punto'},
+  ].reduce(transition,initial());
+  await reset(sample);await tap('stats');await tap('stat-tab:Rotaciones');
+  const section=page.locator('.rotation-phase-section');
+  assert.match(await section.locator('h3').innerText(),/Rotaciones por fase/);
+  assert.deepEqual(await section.locator('thead th').allTextContents(),['Rotación','Fase','Puntos disputados','A favor','En contra','Balance','% ganados']);
+  assert.equal(await section.locator('tbody tr').count(),12);
+  const values=await section.locator('tbody tr').evaluateAll(rows=>Object.fromEntries(rows.map(row=>[`${row.dataset.rotation}-${row.dataset.phase}`,[...row.cells].map(cell=>cell.textContent.trim())])));
+  assert.deepEqual(values['R1-K1'],['R1','K1','1','1','0','1','100 %']);
+  assert.deepEqual(values['R2-K2'],['R2','K2','1','0','1','-1','0 %']);
+  assert.deepEqual(values['R3-K2'],['R3','K2','1','1','0','1','100 %']);
+  assert.deepEqual(values['R6-K1'],['R6','K1','0','0','0','0','—']);
+  assert.deepEqual(values['R6-K2'],['R6','K2','0','0','0','0','—']);
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const layout=await section.evaluate(element=>{const dialog=element.closest('dialog'),wrapper=element.querySelector('.rotation-phase-table'),table=wrapper.querySelector('table'),box=dialog.getBoundingClientRect();return {dialogInside:box.left>=0&&box.right<=innerWidth+1&&box.top>=0&&box.bottom<=innerHeight+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,dialogOverflow:dialog.scrollWidth>dialog.clientWidth+1,tableOverflow:table.scrollWidth>wrapper.clientWidth+1,font:parseFloat(getComputedStyle(table).fontSize)};});
+   assert.equal(layout.dialogInside,true,`${width}x${height} modal visible`);assert.equal(layout.pageOverflow,false,`${width}x${height} página sin overflow`);assert.equal(layout.dialogOverflow,false,`${width}x${height} diálogo sin overflow`);assert.equal(layout.tableOverflow,false,`${width}x${height} tabla sin overflow`);assert(layout.font>=12,`${width}x${height} texto legible`);
+  }
+  await tap('close');
+ });
  await check('Correccion de ultimo registro, deshacer vacio y fallo al guardar',async()=>{
   await reset();await tap('ours');const before=await state();await tap('history');await tap('edit-event:0');await tap('delete-event:0');await tap('confirm-correction');equal((await state()).events.length,0);assert.equal(await page.locator('[data-cmd="undo"]').isDisabled(),false);await page.reload();await undo();equal(await state(),before);
   await tap('history');await tap('edit-event:0');await page.selectOption('[name="kind"]','net');await page.locator('#edit-form button[type="submit"]').click();await page.evaluate(()=>{Storage.prototype.setItem=()=>{throw Error('Full')}});await tap('confirm-correction');equal(await state(),before);assert.match(await page.locator('.dialog-toast.show').innerText(),/No se pudo guardar/);
