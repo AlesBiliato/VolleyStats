@@ -180,6 +180,40 @@ test("PDF conserva A4 landscape y General muestra dorsal y nombre sin rol", () =
   }
 });
 
+test("PDF ordena numéricamente los dorsales en General global y por set sin mutar el report", () => {
+  const state = initial();
+  state.roster = [
+    { id: 10, name: "Diez", role: "Central" },
+    { id: 17, name: "Diecisiete", role: "Receptor" },
+    { id: 3, name: "Tres", role: "Colocador" },
+    { id: 33, name: "Treinta y tres", role: "Opuesto" },
+    { id: 9, name: "Nueve", role: "Líbero" },
+  ];
+  state.status = "finished";
+  const report = buildMatchReport(state);
+  const sourceOrder = report.periods.map((period) =>
+    period.general.rows.map(({ id }) => id),
+  );
+
+  const { tables } = renderProbe(report);
+  const generalTables = tables.filter(
+    ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
+  );
+  assert.equal(generalTables.length, 2);
+  for (const { options } of generalTables) {
+    assert.deepEqual(
+      options.body.map(([label]) => Number(label.match(/^#(\d+)/)?.[1])),
+      [3, 9, 10, 17, 33],
+    );
+    assert.equal(options.body.length, 5);
+    assert.equal(options.foot[0][0], "Total equipo");
+  }
+  assert.deepEqual(
+    report.periods.map((period) => period.general.rows.map(({ id }) => id)),
+    sourceOrder,
+  );
+});
+
 test("PDF aplica la identidad azul oficial y el logotipo completo cuando está disponible", () => {
   assert.deepEqual(PDF_COLORS, {
     primary: [3, 110, 237],

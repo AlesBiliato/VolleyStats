@@ -219,10 +219,12 @@ export function renderMatchPdf(report, dependencies) {
       })),
     ];
     const columnHead = period.general.groups.flatMap((group) => group.columns);
-    const body = period.general.rows.map((player) => [
-      `#${player.id} ${player.name}`,
-      ...generalValues(player.metrics),
-    ]);
+    const body = [...period.general.rows]
+      .sort((left, right) => Number(left.id) - Number(right.id))
+      .map((player) => [
+        `#${player.id} ${player.name}`,
+        ...generalValues(player.metrics),
+      ]);
     const foot = [[
       period.general.total.label,
       ...generalValues(period.general.total.metrics),
