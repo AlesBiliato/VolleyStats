@@ -104,6 +104,7 @@ function generalValues(metrics) {
   return [
     metrics.points,
     metrics.breakPoints,
+    metrics.individualErrors,
     metrics.gp,
     metrics.serve,
     metrics.serveErrors,
@@ -326,6 +327,30 @@ export function renderMatchPdf(report, dependencies) {
       },
     });
   };
+  const drawOwnErrorsSummary = (period) => {
+    const individualErrors = period.general.total.metrics.individualErrors;
+    const unforcedErrors = period.errors.unforcedTotal;
+    const rivalErrors = period.errors.rival.reduce(
+      (total, error) => total + error.count,
+      0,
+    );
+    table({
+      head: [["Errores totales nuestros", "Errores totales rival"]],
+      body: [[individualErrors + unforcedErrors, rivalErrors]],
+      styles: { fontSize: 9, cellPadding: 2, halign: "center" },
+      headStyles: {
+        fillColor: PDF_COLORS.primaryDark,
+        textColor: PDF_COLORS.white,
+        fontStyle: "bold",
+      },
+      bodyStyles: {
+        fillColor: PDF_COLORS.soft,
+        textColor: PDF_COLORS.text,
+        fontStyle: "bold",
+        fontSize: 12,
+      },
+    });
+  };
   const drawErrors = (period) => {
     sectionTitle("Errores");
     table({
@@ -406,6 +431,7 @@ export function renderMatchPdf(report, dependencies) {
       : "Estadísticas agregadas de todos los registros del encuentro";
     sectionTitle(period.label, subtitle);
     drawGeneral(period);
+    if (index === 0) drawOwnErrorsSummary(period);
     drawPhaseAndRotation(period, index === 0);
     drawErrors(period);
   });

@@ -2977,7 +2977,7 @@ function statsBody(tab) {
     )}<p class="muted">Solo se cuentan los registros del periodo seleccionado. Los puntos manuales no se atribuyen a un jugador.</p>`;
   if (tab === "General") {
     const groups = [
-      ["Puntos", ["Tot", "BP", "G-P"]],
+      ["Puntos", ["Tot", "BP", "Err", "G-P"]],
       ["Saque", ["Tot", "Err", "Punto directo"]],
       ["Recepción", ["Tot", "Err", "Pos %", "Exc. %"]],
       ["Ataque", ["Tot", "Err", "Blq", "Exc", "Exc. %"]],
@@ -2985,8 +2985,10 @@ function statsBody(tab) {
     ];
     const empty = (n) => n || "·";
     const pointTotals = aggregatePlayerStatistics(s.players);
+    const individualErrors = (player) =>
+      player.serveErrors + player.receptionErrors + player.attackErrors;
     const renderValues = (p) => [
-      [p.points, p.breakPoints, p.gp],
+      [p.points, p.breakPoints, individualErrors(p), p.gp],
       [p.serve, p.serveErrors, p.aces],
       [
         p.reception,
@@ -3022,7 +3024,7 @@ function statsBody(tab) {
       )
       .join(
         "",
-    )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · G-P: puntos ganados menos pérdidas atribuibles; Bloqueo Err no penaliza · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
+    )}</tr></tfoot></table></div><p class="muted">BP: puntos anotados en K2 · Err: errores de saque, recepción y ataque; no incluye ataques bloqueados ni errores de bloqueo · G-P: puntos ganados menos pérdidas atribuibles; Bloqueo Err no penaliza · Pos: recepciones # y + · Exc: puntos directos · El Total suma los registros de jugadores; no incluye puntos manuales ni errores del rival.</p>`;
   }
   if (tab === "K1/K2") {
     const card = (phase, title, description) => {

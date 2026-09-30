@@ -325,9 +325,9 @@ test("General conserva grupos, métricas y separadores semánticos", () => {
     ["PUNTOS", "SAQUE", "RECEPCIÓN", "ATAQUE", "BLOQUEO"],
   );
   assert.deepEqual(generalTable.head[1], generalGroups.flatMap(({ columns }) => columns));
-  assert.equal(generalTable.head[1].length, 17);
-  assert.equal(generalTable.body[0].length, 18);
-  assert.equal(generalTable.foot[0].length, 18);
+  assert.equal(generalTable.head[1].length, 18);
+  assert.equal(generalTable.body[0].length, 19);
+  assert.equal(generalTable.foot[0].length, 19);
 
   const linesBeforeHooks = calls.filter(({ type }) => type === "line").length;
   let columnIndex = 1;
@@ -349,6 +349,56 @@ test("General conserva grupos, métricas y separadores semánticos", () => {
   assert.equal(
     calls.filter(({ type }) => type === "line").length - linesBeforeHooks,
     7,
+  );
+});
+
+test("PUNTOS Err y el resumen excluyen ataques bloqueados y errores de bloqueo", () => {
+  const state = run(initial(), [
+    action(9, "Saque", "="),
+    action(9, "Recepción", "="),
+    action(9, "Ataque", "="),
+    action(9, "Ataque", "Blo"),
+    action(9, "Bloqueo", "="),
+    point(1, "Error nuestro no forzado · Toque de red", {
+      category: "unforced-error",
+      reason: "net",
+    }),
+    point(0, "Error de saque rival"),
+    point(0, "Error de ataque rival"),
+    { type: "finish-match", label: "Partido finalizado" },
+  ]);
+  const player = statistics(state).players.find(({ id }) => id === 9);
+  assert.equal(player.serveErrors, 1);
+  assert.equal(player.receptionErrors, 1);
+  assert.equal(player.attackErrors, 1);
+  assert.equal(player.blocked, 1);
+  assert.equal(player.blockErrors, 1);
+  assert.equal(player.gp, -4);
+
+  const report = buildMatchReport(state);
+  const row = report.periods[0].general.rows.find(({ id }) => id === 9);
+  assert.equal(row.metrics.individualErrors, 3);
+  assert.equal(report.periods[0].general.total.metrics.individualErrors, 3);
+
+  const { tables } = renderProbe(report);
+  const generalTable = tables.find(
+    ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
+  ).options;
+  const playerRow = generalTable.body.find(([label]) => label.startsWith("#9 "));
+  assert.equal(playerRow[3], 3);
+  assert.equal(generalTable.foot[0][3], 3);
+
+  const summary = tables.find(
+    ({ options }) => options.head?.[0]?.[0] === "Errores totales nuestros",
+  ).options;
+  assert.deepEqual(summary.head, [[
+    "Errores totales nuestros",
+    "Errores totales rival",
+  ]]);
+  assert.deepEqual(summary.body, [[4, 2]]);
+  assert.doesNotMatch(
+    JSON.stringify(summary),
+    /Errores individuales|No forzados\/colectivos/,
   );
 });
 

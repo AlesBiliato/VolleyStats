@@ -8,7 +8,7 @@ import {
 export { resolveRosterName } from "./statistics.js";
 
 export const generalGroups = [
-  { label: "PUNTOS", columns: ["Tot", "BP", "G-P"] },
+  { label: "PUNTOS", columns: ["Tot", "BP", "Err", "G-P"] },
   { label: "SAQUE", columns: ["Tot", "Err", "Punto directo"] },
   { label: "RECEPCIÓN", columns: ["Tot", "Err", "Pos.%", "Exc.%"] },
   { label: "ATAQUE", columns: ["Tot", "Err", "Blq", "Exc", "Exc.%"] },
@@ -19,6 +19,8 @@ function generalMetrics(player) {
   return {
     points: player.points,
     breakPoints: player.breakPoints,
+    individualErrors:
+      player.serveErrors + player.receptionErrors + player.attackErrors,
     gp: player.gp,
     serve: player.serve,
     serveErrors: player.serveErrors,
