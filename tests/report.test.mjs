@@ -389,16 +389,24 @@ test("PUNTOS Err y el resumen excluyen ataques bloqueados y errores de bloqueo",
   assert.equal(generalTable.foot[0][3], 3);
 
   const summary = tables.find(
-    ({ options }) => options.head?.[0]?.[0] === "Errores totales nuestros",
+    ({ options }) => {
+      const heading = options.head?.[0]?.[0];
+      return typeof heading === "string" && heading.startsWith("Errores nuestros");
+    },
   ).options;
   assert.deepEqual(summary.head, [[
-    "Errores totales nuestros",
-    "Errores totales rival",
+    "Errores nuestros -> 4",
+    "Errores rival -> 2",
   ]]);
-  assert.deepEqual(summary.body, [[4, 2]]);
+  assert.deepEqual(summary.body, [[
+    "Saq 1 · Atq 1 · Rec 1 · NF 1",
+    "Saq 1 · Atq 1",
+  ]]);
+  assert.equal(summary.head.length, 1);
+  assert.equal(summary.body.length, 1);
   assert.doesNotMatch(
     JSON.stringify(summary),
-    /Errores individuales|No forzados\/colectivos/,
+    /Errores individuales|No forzados\/colectivos|Rec 0|NF 0/,
   );
 });
 

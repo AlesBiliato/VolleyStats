@@ -328,15 +328,24 @@ export function renderMatchPdf(report, dependencies) {
     });
   };
   const drawOwnErrorsSummary = (period) => {
-    const individualErrors = period.general.total.metrics.individualErrors;
+    const metrics = period.general.total.metrics;
+    const individualErrors = metrics.individualErrors;
     const unforcedErrors = period.errors.unforcedTotal;
-    const rivalErrors = period.errors.rival.reduce(
-      (total, error) => total + error.count,
-      0,
-    );
+    const rivalServeErrors =
+      period.errors.rival.find(({ key }) => key === "serve")?.count || 0;
+    const rivalAttackErrors =
+      period.errors.rival.find(({ key }) => key === "attack")?.count || 0;
+    const ourTotal = individualErrors + unforcedErrors;
+    const rivalTotal = rivalServeErrors + rivalAttackErrors;
     table({
-      head: [["Errores totales nuestros", "Errores totales rival"]],
-      body: [[individualErrors + unforcedErrors, rivalErrors]],
+      head: [[
+        `Errores nuestros -> ${ourTotal}`,
+        `Errores rival -> ${rivalTotal}`,
+      ]],
+      body: [[
+        `Saq ${metrics.serveErrors} · Atq ${metrics.attackErrors} · Rec ${metrics.receptionErrors} · NF ${unforcedErrors}`,
+        `Saq ${rivalServeErrors} · Atq ${rivalAttackErrors}`,
+      ]],
       styles: { fontSize: 9, cellPadding: 2, halign: "center" },
       headStyles: {
         fillColor: PDF_COLORS.primaryDark,
