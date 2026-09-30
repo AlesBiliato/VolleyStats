@@ -727,14 +727,71 @@ h1 > span {
   margin-top: 21px;
   padding-top: 16px;
   display: flex;
-  gap: 18px;
+  gap: 12px;
   align-items: center;
   font-size: 11px;
   color: var(--brand-muted);
+  min-width: 0;
 }
-.latest > span:last-child {
-  margin-left: auto;
+.latest-heading {
+  flex: 0 0 auto;
+}
+.latest-actions-track {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.recent-action {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  max-width: min(240px, 100%);
+  min-width: 0;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand-muted);
+  line-height: 1.2;
+}
+.recent-action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-action strong {
+  flex: 0 0 auto;
+  color: var(--brand-text);
+  font-size: 10px;
+}
+.recent-action.current {
+  border-color: var(--brand-primary);
+  background: var(--brand-soft);
+  color: var(--brand-text);
   font-weight: 600;
+}
+.latest-empty {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.latest-empty span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.latest-empty strong {
+  flex: 0 0 auto;
+  color: var(--brand-text);
 }
 footer {
   display: flex;
@@ -1572,15 +1629,10 @@ body {
 }
 #app .latest {
   margin: 0;
-  padding-top: 6px;
-  gap: 12px;
+  padding-top: 4px;
+  gap: 10px;
   flex-shrink: 0;
   min-width: 0;
-}
-#app .latest > span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 #app footer {
   margin: 0;

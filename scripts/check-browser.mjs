@@ -333,6 +333,52 @@ try{
   await commit('theirs');s=await state();equal(s.score,[2,1]);equal(s.serving,false);equal(s.rotation,2);
   await undo();equal((await state()).score,[2,0]);await undo();await undo();equal(await state(),before);
  });
+ await check('Acciones recientes se adaptan al ancho y siguen el historial real',async()=>{
+  const settleLayout=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const recentLayout=()=>page.evaluate(()=>{
+   const strip=document.querySelector('.latest'),track=document.querySelector('.latest-actions-track'),all=[...document.querySelectorAll('.recent-action')],visible=all.filter(item=>!item.hidden),trackBox=track?.getBoundingClientRect(),current=document.querySelector('.recent-action.current');
+   return {count:visible.length,indices:visible.map(item=>Number(item.dataset.eventIndex)),singleLine:new Set(visible.map(item=>Math.round(item.getBoundingClientRect().top))).size<=1,inside:visible.every(item=>{const box=item.getBoundingClientRect();return box.left>=trackBox.left-1&&box.right<=trackBox.right+1;}),latestVisible:Boolean(current&&!current.hidden),latestIndex:Number(current?.dataset.eventIndex),latestRightmost:visible.every(item=>item.getBoundingClientRect().right<=current.getBoundingClientRect().right+1),pageOverflow:document.documentElement.scrollWidth>innerWidth,trackOverflow:track?track.scrollWidth>track.clientWidth+1:false,height:strip.getBoundingClientRect().height};
+  });
+
+  await page.setViewportSize({width:1024,height:768});
+  await reset();
+  assert.equal(await page.locator('.recent-action').count(),0);
+  assert.match(await page.locator('.latest-empty').innerText(),/Listos para el primer punto/);
+  assert.match(await page.locator('.latest-empty').innerText(),/0 – 0/);
+
+  const one=transition(initial(),{type:'point',team:0,label:'Punto para nosotros'});
+  await reset(one);await settleLayout();
+  assert.equal(await page.locator('.recent-action').count(),1);
+  assert.equal(await page.locator('.recent-action.current').innerText(),'Punto para nosotros\n1 – 0');
+  assert.match(await page.locator('.recent-action.current').getAttribute('aria-label'),/Punto para nosotros\. Marcador 1 – 0/);
+
+  const commands=[4,9,12,7,8,15].flatMap(player=>[
+   {type:'action',player,action:'Ataque',grade:'?',label:`#${player} · Ataque ?`},
+   {type:'action',player,action:'Recepción',grade:'+',label:`#${player} · Recepción +`},
+  ]);
+  const sample=commands.reduce(transition,initial());
+  await page.setViewportSize({width:1920,height:1080});await reset(sample);await settleLayout();
+  const wide=await recentLayout();
+  assert(wide.count>1);assert.equal(wide.singleLine,true);assert.equal(wide.inside,true);assert.equal(wide.latestVisible,true);assert.equal(wide.latestIndex,sample.events.length-1);assert.equal(wide.latestRightmost,true);assert.deepEqual(wide.indices,[...wide.indices].sort((a,b)=>a-b));
+
+  await page.setViewportSize({width:768,height:1024});await settleLayout();
+  const narrow=await recentLayout();
+  assert(wide.count>narrow.count,'el viewport amplio muestra más acciones');assert(narrow.count>=1);assert(narrow.indices[0]>0,'desaparecen primero las acciones más antiguas');assert.deepEqual(narrow.indices,Array.from({length:narrow.count},(_,index)=>sample.events.length-narrow.count+index));assert.equal(narrow.latestVisible,true);assert.equal(narrow.latestRightmost,true);
+
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080],[1024,600],[1366,640]]){
+   await page.setViewportSize({width,height});await settleLayout();const layout=await recentLayout();
+   assert.equal(layout.singleLine,true,`${width}x${height} una fila`);assert.equal(layout.inside,true,`${width}x${height} chips completos`);assert.equal(layout.latestVisible,true,`${width}x${height} última visible`);assert.equal(layout.latestRightmost,true,`${width}x${height} última a la derecha`);assert.equal(layout.pageOverflow,false,`${width}x${height} sin overflow de página`);assert.equal(layout.trackOverflow,false,`${width}x${height} sin scroll horizontal`);assert(layout.height<=32,`${width}x${height} altura compacta`);
+  }
+
+  const longLabel='Cambio de líbero activo · Jugador con un nombre extraordinariamente largo → Otro jugador con nombre igualmente largo';
+  const longState=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'?',label:longLabel});
+  await page.setViewportSize({width:768,height:1024});await reset(longState);await settleLayout();
+  const longChip=page.locator('.recent-action.current');assert.equal(await longChip.getAttribute('title'),`${longLabel}. Marcador 0 – 0`);assert.equal(await longChip.getAttribute('aria-label'),`${longLabel}. Marcador 0 – 0`);assert.equal(await longChip.evaluate(item=>item.querySelector('.recent-action-label').scrollWidth>item.querySelector('.recent-action-label').clientWidth),true);assert.equal((await recentLayout()).inside,true);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+
+  await page.setViewportSize({width:1024,height:768});await reset(sample);await undo();await settleLayout();
+  assert.equal((await state()).events.length,sample.events.length-1);assert.equal(await page.locator('.recent-action').count(),sample.events.length-1);assert.equal(Number(await page.locator('.recent-action.current').getAttribute('data-event-index')),sample.events.length-2);
+  await tap(`history`);await tap(`edit-event:${sample.events.length-2}`);await page.selectOption('[name="player"]','4');await page.locator('#edit-form button[type="submit"]').click();await tap('confirm-correction');await settleLayout();assert.match(await page.locator('.recent-action.current').innerText(),/#4 · Ataque \?/);assert.doesNotMatch(await page.locator('.recent-action.current').innerText(),/#15 · Ataque \?/);
+ });
  await check('Errores rivales y errores nuestros, historial, correccion y persistencia',async()=>{
   await reset();await tap('serve-error');await commit('attack-error');equal((await state()).score,[2,0]);
   for(const reason of ['rotation','net']){await tap('unforced-error');await commit('record-unforced:'+reason);const s=await state();equal(s.events.at(-1).reason,reason);equal(s.events.at(-1).category,'unforced-error');equal(s.serving,false);equal(s.rotation,2);}

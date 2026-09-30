@@ -114,6 +114,7 @@ let page = hasMatch && state.demo ? "setup" : "match",
   lastTap = 0;
 const app = document.querySelector("#app"),
   modal = document.querySelector("#modal");
+let recentActionsObserver = null;
 modal.addEventListener("close", () => {
   if (modal.dataset.context === "action") {
     selected = null;
@@ -1236,7 +1237,69 @@ function renderRosterSelector() {
   `;
 }
 
+function recentActionsMarkup() {
+  if (!state.events.length) {
+    return `<div class="latest-empty"><span>Listos para el primer punto.</span><strong>0 – 0</strong></div>`;
+  }
+
+  const lastIndex = state.events.length - 1;
+
+  return `<div class="latest-actions-track" role="list" aria-label="Últimas acciones registradas">${state.events
+    .map((event, index) => {
+      const score = event.after.join(" – ");
+      const accessibleLabel = `${event.label}. Marcador ${score}`;
+
+      return `<span class="recent-action${index === lastIndex ? " current" : ""}" data-event-index="${index}" role="listitem" title="${esc(accessibleLabel)}" aria-label="${esc(accessibleLabel)}"><span class="recent-action-label">${esc(event.label)}</span><strong>${score}</strong></span>`;
+    })
+    .join("")}</div>`;
+}
+
+function disconnectRecentActionsObserver() {
+  recentActionsObserver?.disconnect();
+  recentActionsObserver = null;
+}
+
+function fitRecentActions() {
+  const track = document.querySelector(".latest-actions-track");
+  if (!track) return;
+
+  const actions = [...track.querySelectorAll(".recent-action")];
+  if (!actions.length) return;
+
+  actions.forEach((item) => {
+    item.hidden = true;
+  });
+
+  const trackBox = track.getBoundingClientRect();
+  const lastIndex = actions.length - 1;
+  actions[lastIndex].hidden = false;
+
+  for (let index = lastIndex - 1; index >= 0; index--) {
+    const item = actions[index];
+    item.hidden = false;
+    const itemBox = item.getBoundingClientRect();
+
+    if (itemBox.left < trackBox.left - 0.5) {
+      item.hidden = true;
+      break;
+    }
+  }
+}
+
+function observeRecentActions() {
+  const track = document.querySelector(".latest-actions-track");
+  if (!track) return;
+
+  fitRecentActions();
+  requestAnimationFrame(fitRecentActions);
+
+  if (!("ResizeObserver" in window)) return;
+  recentActionsObserver = new ResizeObserver(fitRecentActions);
+  recentActionsObserver.observe(track);
+}
+
 function render() {
+  disconnectRecentActionsObserver();
   if (page !== "match" || state.status !== "playing") {
     keyboardJerseyBuffer = "";
   }
@@ -1311,21 +1374,8 @@ function render() {
             </div>
 
             <div class="latest">
-              <span class="eyebrow">ÚLTIMA OPERACIÓN</span>
-              <span>
-                ${
-                  state.events.length
-                    ? esc(state.events.at(-1).label)
-                    : "Listos para el primer punto."
-                }
-              </span>
-              <span>
-                ${
-                  state.events.length
-                    ? state.events.at(-1).after.join(" – ")
-                    : "0 – 0"
-                }
-              </span>
+              <span class="eyebrow latest-heading">ÚLTIMAS ACCIONES</span>
+              ${recentActionsMarkup()}
             </div>
           `
           : page === "roster"
@@ -1388,6 +1438,7 @@ function render() {
       </footer>
     </main>
   `;
+  if (page === "match") observeRecentActions();
 }
 function archiveReportSection() {
   let archives;
