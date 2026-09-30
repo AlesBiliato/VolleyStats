@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initial, transition } from "../src/domain.js";
-import { renderMatchPdf } from "../src/pdf-report.js";
+import { PDF_COLORS, renderMatchPdf } from "../src/pdf-report.js";
 import { buildMatchReport, generalGroups } from "../src/report.js";
 import { statistics } from "../src/statistics.js";
 
@@ -56,7 +56,7 @@ function finishedSample() {
   ]);
 }
 
-function renderProbe(report) {
+function renderProbe(report, { logoData = null } = {}) {
   const calls = [];
   let options;
   class PdfProbe {
@@ -78,8 +78,15 @@ function renderProbe(report) {
     setFontSize() {}
     setDrawColor(...color) { calls.push({ type: "draw-color", color }); }
     setLineWidth(width) { calls.push({ type: "line-width", width }); }
-    line(...coordinates) { calls.push({ type: "line", coordinates }); }
-    text() {}
+    line(...coordinates) {
+      calls.push({ type: "line", page: this.page, coordinates });
+    }
+    addImage(...imageOptions) {
+      calls.push({ type: "add-image", page: this.page, imageOptions });
+    }
+    text(...textOptions) {
+      calls.push({ type: "text", page: this.page, textOptions });
+    }
     addPage(...pageOptions) {
       this.page += 1;
       calls.push({ type: "add-page", page: this.page, pageOptions });
@@ -93,7 +100,11 @@ function renderProbe(report) {
     calls.push({ type: "table", page: doc.page, options: tableOptions });
     doc.lastAutoTable = { finalY: 60 };
   };
-  const document = renderMatchPdf(report, { jsPDF: PdfProbe, autoTable });
+  const document = renderMatchPdf(report, {
+    jsPDF: PdfProbe,
+    autoTable,
+    logoData,
+  });
   return { calls, document, options, tables };
 }
 
@@ -167,6 +178,106 @@ test("PDF conserva A4 landscape y General muestra dorsal y nombre sin rol", () =
   for (const player of report.periods[0].general.rows) {
     assert.equal(labels.get(player.id), `#${player.id} ${player.name}`);
   }
+});
+
+test("PDF aplica la identidad azul oficial y el logotipo completo cuando está disponible", () => {
+  assert.deepEqual(PDF_COLORS, {
+    primary: [3, 110, 237],
+    primaryDark: [4, 31, 77],
+    secondary: [4, 53, 139],
+    accent: [52, 166, 243],
+    soft: [234, 244, 255],
+    pale: [247, 251, 255],
+    border: [203, 220, 240],
+    text: [23, 43, 70],
+    muted: [96, 114, 138],
+    white: [255, 255, 255],
+  });
+  const { calls, tables } = renderProbe(buildMatchReport(finishedSample()), {
+    logoData: "data:image/png;base64,logo",
+  });
+  const image = calls.find(({ type }) => type === "add-image");
+  assert.equal(image.type, "add-image");
+  assert.equal(image.page, 1);
+  assert.deepEqual(image.imageOptions.slice(0, 5), [
+    "data:image/png;base64,logo",
+    "PNG",
+    14,
+    13.5,
+    20,
+  ]);
+  assert.equal(image.imageOptions[5], (20 * 941) / 1109);
+  const generalTable = tables.find(
+    ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
+  ).options;
+  assert.deepEqual(generalTable.headStyles.fillColor, PDF_COLORS.primaryDark);
+  assert.deepEqual(generalTable.styles.lineColor, PDF_COLORS.border);
+});
+
+test("cabecera principal no duplica la marca y las páginas siguientes son mínimas", () => {
+  const report = buildMatchReport(finishedSample());
+  const { calls, document } = renderProbe(report, {
+    logoData: "data:image/png;base64,logo",
+  });
+  assert.equal(
+    calls.filter(({ type, page }) => type === "add-image" && page === 1).length,
+    1,
+  );
+  assert.equal(
+    calls.some(
+      ({ type, textOptions }) =>
+        type === "text" && textOptions[0] === "VolleyStats",
+    ),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      ({ type, page, coordinates }) =>
+        type === "line" &&
+        page === 1 &&
+        coordinates[1] === 11 &&
+        coordinates[3] === 11,
+    ),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      ({ type, page, textOptions }) =>
+        type === "text" &&
+        page === 1 &&
+        textOptions[0] === report.header.matchup &&
+        textOptions[2] === 8,
+    ),
+    false,
+  );
+
+  const compactHeaders = calls.filter(
+    ({ type, page, textOptions }) =>
+      type === "text" &&
+      page > 1 &&
+      textOptions[0] === report.header.matchup &&
+      textOptions[2] === 8,
+  );
+  assert.equal(compactHeaders.length, document.getNumberOfPages() - 1);
+  assert.equal(
+    calls.filter(
+      ({ type, page, coordinates }) =>
+        type === "line" &&
+        page > 1 &&
+        coordinates[1] === 11 &&
+        coordinates[3] === 11,
+    ).length,
+    document.getNumberOfPages() - 1,
+  );
+});
+
+test("PDF sigue generándose si el logotipo no está disponible", () => {
+  const rendered = renderProbe(buildMatchReport(finishedSample()));
+  assert.equal(
+    rendered.calls.some(({ type }) => type === "add-image"),
+    false,
+  );
+  assert.ok(rendered.tables.length > 0);
 });
 
 test("General conserva grupos, métricas y separadores semánticos", () => {

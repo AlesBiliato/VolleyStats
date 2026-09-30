@@ -1,13 +1,15 @@
 import { buildMatchReport } from "./report.js";
 
-const COLORS = {
-  ink: [31, 49, 43],
-  green: [11, 83, 67],
-  greenSoft: [230, 238, 232],
-  greenPale: [246, 249, 246],
-  line: [202, 216, 207],
-  groupLine: [103, 137, 120],
-  muted: [101, 119, 110],
+export const PDF_COLORS = {
+  primary: [3, 110, 237],
+  primaryDark: [4, 31, 77],
+  secondary: [4, 53, 139],
+  accent: [52, 166, 243],
+  soft: [234, 244, 255],
+  pale: [247, 251, 255],
+  border: [203, 220, 240],
+  text: [23, 43, 70],
+  muted: [96, 114, 138],
   white: [255, 255, 255],
 };
 
@@ -66,6 +68,27 @@ async function loadPdfDependencies() {
   return dependencyPromise;
 }
 
+async function loadPdfLogo() {
+  try {
+    const response = await fetch(
+      new URL("./assets/pdf-logo.png", import.meta.url),
+      { cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result), {
+        once: true,
+      });
+      reader.addEventListener("error", () => resolve(null), { once: true });
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function formatDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value || "Sin fecha";
   const [year, month, day] = value.split("-").map(Number);
@@ -100,7 +123,7 @@ function generalValues(metrics) {
 }
 
 export function renderMatchPdf(report, dependencies) {
-  const { jsPDF, autoTable } = dependencies;
+  const { jsPDF, autoTable, logoData = null } = dependencies;
   const doc = new jsPDF({
     orientation: "landscape",
     unit: "mm",
@@ -129,13 +152,13 @@ export function renderMatchPdf(report, dependencies) {
   };
   const sectionTitle = (title, subtitle = "") => {
     ensureSpace(subtitle ? 17 : 12);
-    doc.setTextColor(...COLORS.green);
+    doc.setTextColor(...PDF_COLORS.primaryDark);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.text(title, margin, y);
     y += 5;
     if (subtitle) {
-      doc.setTextColor(...COLORS.muted);
+      doc.setTextColor(...PDF_COLORS.muted);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.text(subtitle, margin, y);
@@ -143,6 +166,12 @@ export function renderMatchPdf(report, dependencies) {
     }
   };
   const table = (options) => {
+    const {
+      styles = {},
+      headStyles = {},
+      alternateRowStyles = {},
+      ...tableOptions
+    } = options;
     autoTable(doc, {
       startY: y,
       margin: { top: 16, right: margin, bottom: 14, left: margin },
@@ -151,19 +180,24 @@ export function renderMatchPdf(report, dependencies) {
         font: "helvetica",
         fontSize: 7.2,
         cellPadding: 1.8,
-        textColor: COLORS.ink,
-        lineColor: COLORS.line,
+        textColor: PDF_COLORS.text,
+        lineColor: PDF_COLORS.border,
         lineWidth: 0.15,
         valign: "middle",
+        ...styles,
       },
       headStyles: {
-        fillColor: COLORS.green,
-        textColor: COLORS.white,
+        fillColor: PDF_COLORS.primaryDark,
+        textColor: PDF_COLORS.white,
         fontStyle: "bold",
         halign: "center",
+        ...headStyles,
       },
-      alternateRowStyles: { fillColor: COLORS.greenPale },
-      ...options,
+      alternateRowStyles: {
+        fillColor: PDF_COLORS.pale,
+        ...alternateRowStyles,
+      },
+      ...tableOptions,
     });
     y = doc.lastAutoTable.finalY + 7;
   };
@@ -201,17 +235,20 @@ export function renderMatchPdf(report, dependencies) {
       showHead: "everyPage",
       showFoot: "lastPage",
       styles: { fontSize: 6.6, cellPadding: 1.45, halign: "center" },
-      headStyles: { fillColor: COLORS.green, textColor: COLORS.white },
+      headStyles: {
+        fillColor: PDF_COLORS.primaryDark,
+        textColor: PDF_COLORS.white,
+      },
       footStyles: {
-        fillColor: COLORS.greenSoft,
-        textColor: COLORS.ink,
+        fillColor: PDF_COLORS.soft,
+        textColor: PDF_COLORS.text,
         fontStyle: "bold",
       },
       columnStyles: { 0: { halign: "left", cellWidth: 34 } },
       didDrawCell: ({ cell, column, section }) => {
         if (!groupStartColumns.has(column.index)) return;
         doc.setDrawColor(
-          ...(section === "head" ? COLORS.white : COLORS.groupLine),
+          ...(section === "head" ? PDF_COLORS.white : PDF_COLORS.secondary),
         );
         doc.setLineWidth(section === "head" ? 0.6 : 0.45);
         doc.line(cell.x, cell.y, cell.x, cell.y + cell.height);
@@ -275,13 +312,13 @@ export function renderMatchPdf(report, dependencies) {
         if (section !== "body") return;
         cell.styles.fillColor =
           Math.floor(row.index / 2) % 2 === 0
-            ? COLORS.greenPale
-            : COLORS.white;
+            ? PDF_COLORS.pale
+            : PDF_COLORS.white;
       },
       didDrawCell: ({ cell, row, section }) => {
         if (section !== "body" || row.index === 0 || row.index % 2 !== 0)
           return;
-        doc.setDrawColor(...COLORS.groupLine);
+        doc.setDrawColor(...PDF_COLORS.secondary);
         doc.setLineWidth(0.35);
         doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
       },
@@ -301,37 +338,38 @@ export function renderMatchPdf(report, dependencies) {
       ],
       foot: [["", "Total nuestros no forzados", period.errors.unforcedTotal]],
       footStyles: {
-        fillColor: COLORS.greenSoft,
-        textColor: COLORS.ink,
+        fillColor: PDF_COLORS.soft,
+        textColor: PDF_COLORS.text,
         fontStyle: "bold",
       },
       columnStyles: { 2: { halign: "center", cellWidth: 25 } },
     });
   };
 
-  doc.setTextColor(...COLORS.green);
+  const logoWidth = 20;
+  const logoHeight = (logoWidth * 941) / 1109;
+  if (logoData) {
+    doc.addImage(logoData, "PNG", margin, 13.5, logoWidth, logoHeight);
+  }
+  const headerTextX = logoData ? margin + logoWidth + 4 : margin;
+  doc.setTextColor(...PDF_COLORS.primary);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("INFORME DE PARTIDO", margin, y);
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.muted);
-  doc.text("VOLLEYSTATS", pageWidth - margin, y, { align: "right" });
-  y += 10;
-  doc.setTextColor(...COLORS.ink);
-  doc.setFontSize(17);
-  doc.text(report.header.matchup, margin, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
+  doc.text("INFORME DE ESTADÍSTICAS", headerTextX, 16.5);
+  doc.setTextColor(...PDF_COLORS.text);
+  doc.setFontSize(14);
+  doc.text(report.header.matchup, headerTextX, 23);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
   const details = [
     report.header.competition || "Sin competición",
     report.header.venue || "Sede no indicada",
     formatDate(report.header.date),
     report.header.time ? `${report.header.time} h` : "Hora no indicada",
   ];
-  doc.setTextColor(...COLORS.muted);
-  doc.text(details.join("  ·  "), margin, y);
-  y += 10;
+  doc.setTextColor(...PDF_COLORS.muted);
+  doc.text(details.join("  ·  "), headerTextX, 29);
+  y = 35;
 
   table({
     head: [["RESULTADO FINAL", "SETS FINALIZADOS"]],
@@ -373,16 +411,15 @@ export function renderMatchPdf(report, dependencies) {
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page);
-    doc.setDrawColor(...COLORS.line);
-    doc.setLineWidth(0.2);
-    doc.line(margin, 11, pageWidth - margin, 11);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLORS.green);
-    doc.text("VolleyStats", margin, 8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.muted);
-    doc.text(report.header.matchup, pageWidth / 2, 8, { align: "center" });
+    if (page > 1) {
+      doc.setDrawColor(...PDF_COLORS.border);
+      doc.setLineWidth(0.2);
+      doc.line(margin, 11, pageWidth - margin, 11);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...PDF_COLORS.muted);
+      doc.text(report.header.matchup, pageWidth / 2, 8, { align: "center" });
+    }
     doc.text(`Página ${page}`, pageWidth - margin, pageHeight - 7, {
       align: "right",
     });
@@ -393,8 +430,11 @@ export function renderMatchPdf(report, dependencies) {
 
 export async function generateMatchPdf(match, options = {}) {
   const report = buildMatchReport(match, options);
-  const dependencies = await loadPdfDependencies();
-  const document = renderMatchPdf(report, dependencies);
+  const [dependencies, logoData] = await Promise.all([
+    loadPdfDependencies(),
+    loadPdfLogo(),
+  ]);
+  const document = renderMatchPdf(report, { ...dependencies, logoData });
   document.save(report.filename);
   return report;
 }

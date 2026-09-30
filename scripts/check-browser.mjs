@@ -620,6 +620,16 @@ try{
   assert(bytes.length>1000);
   assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
   assert.match(bytes.toString('latin1'),/\/MediaBox\s*\[\s*0\s+0\s+841(?:\.\d+)?\s+595(?:\.\d+)?\s*\]/);
+  assert.match(bytes.toString('latin1'),/\/Subtype\s*\/Image/);
+
+  await page.route('**/src/assets/pdf-logo.png',route=>route.abort());
+  const fallbackDownloadPromise=page.waitForEvent('download');
+  await tap('generate-pdf');
+  const fallbackDownload=await fallbackDownloadPromise;
+  const fallbackBytes=await readFile(await fallbackDownload.path());
+  assert.equal(fallbackBytes.subarray(0,5).toString(),'%PDF-');
+  assert.match(fallbackBytes.toString('latin1'),/\/MediaBox\s*\[\s*0\s+0\s+841(?:\.\d+)?\s+595(?:\.\d+)?\s*\]/);
+  await page.unroute('**/src/assets/pdf-logo.png');
 
   await tap('history');
   assert.equal(await page.locator('#modal [data-cmd="generate-pdf"]').count(),1);
