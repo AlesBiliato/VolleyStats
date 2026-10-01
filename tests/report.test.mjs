@@ -352,61 +352,75 @@ test("General conserva grupos, métricas y separadores semánticos", () => {
   );
 });
 
-test("PUNTOS Err y el resumen excluyen ataques bloqueados y errores de bloqueo", () => {
-  const state = run(initial(), [
-    action(9, "Saque", "="),
-    action(9, "Recepción", "="),
-    action(9, "Ataque", "="),
-    action(9, "Ataque", "Blo"),
-    action(9, "Bloqueo", "="),
-    point(1, "Error nuestro no forzado · Toque de red", {
-      category: "unforced-error",
-      reason: "net",
-    }),
-    point(0, "Error de saque rival"),
-    point(0, "Error de ataque rival"),
+test("el resumen suma saque, ataque y recepción sin cambiar PUNTOS Err", () => {
+  const base = initial();
+  Object.assign(base, {
+    rosterName: "CV Ciutadella",
+    rival: "Son Ferrer",
+  });
+  const state = run(base, [
+    ...Array.from({ length: 2 }, () => action(9, "Saque", "=")),
+    ...Array.from({ length: 2 }, () => action(9, "Saque", "#")),
+    ...Array.from({ length: 4 }, () => action(9, "Recepción", "=")),
+    ...Array.from({ length: 3 }, () => action(9, "Ataque", "=")),
+    ...Array.from({ length: 6 }, () => action(9, "Ataque", "Blo")),
+    ...Array.from({ length: 7 }, () => action(9, "Bloqueo", "=")),
+    ...Array.from({ length: 5 }, () =>
+      point(1, "Error nuestro no forzado · Toque de red", {
+        category: "unforced-error",
+        reason: "net",
+      })),
+    ...Array.from({ length: 4 }, () => point(0, "Error de saque rival")),
+    ...Array.from({ length: 3 }, () => point(0, "Error de ataque rival")),
     { type: "finish-match", label: "Partido finalizado" },
   ]);
   const player = statistics(state).players.find(({ id }) => id === 9);
-  assert.equal(player.serveErrors, 1);
-  assert.equal(player.receptionErrors, 1);
-  assert.equal(player.attackErrors, 1);
-  assert.equal(player.blocked, 1);
-  assert.equal(player.blockErrors, 1);
-  assert.equal(player.gp, -4);
+  assert.equal(player.serveErrors, 2);
+  assert.equal(player.aces, 2);
+  assert.equal(player.receptionErrors, 4);
+  assert.equal(player.attackErrors, 3);
+  assert.equal(player.blocked, 6);
+  assert.equal(player.blockErrors, 7);
 
   const report = buildMatchReport(state);
   const row = report.periods[0].general.rows.find(({ id }) => id === 9);
-  assert.equal(row.metrics.individualErrors, 3);
-  assert.equal(report.periods[0].general.total.metrics.individualErrors, 3);
+  assert.equal(row.metrics.individualErrors, 9);
+  assert.equal(report.periods[0].general.total.metrics.individualErrors, 9);
+  assert.equal(report.periods[0].general.total.metrics.aces, 2);
+  assert.equal(report.periods[0].errors.unforcedTotal, 5);
 
   const { tables } = renderProbe(report);
   const generalTable = tables.find(
     ({ options }) => options.head?.[0]?.[0]?.content === "JUGADOR",
   ).options;
   const playerRow = generalTable.body.find(([label]) => label.startsWith("#9 "));
-  assert.equal(playerRow[3], 3);
-  assert.equal(generalTable.foot[0][3], 3);
+  assert.equal(playerRow[3], 9);
+  assert.equal(generalTable.foot[0][3], 9);
 
   const summary = tables.find(
     ({ options }) => {
       const heading = options.head?.[0]?.[0];
-      return typeof heading === "string" && heading.startsWith("Errores nuestros");
+      return typeof heading === "string" && heading.startsWith("Errores CV Ciutadella");
     },
   ).options;
   assert.deepEqual(summary.head, [[
-    "Errores nuestros -> 4",
-    "Errores rival -> 2",
+    "Errores CV Ciutadella: 9",
+    "Errores Son Ferrer: 9",
   ]]);
   assert.deepEqual(summary.body, [[
-    "Saq 1 · Atq 1 · Rec 1 · NF 1",
-    "Saq 1 · Atq 1",
+    "Saques 2 · Ataques 3 · Recepciones 4",
+    "Saques 4 · Ataques 3 · Recepciones 2",
   ]]);
   assert.equal(summary.head.length, 1);
   assert.equal(summary.body.length, 1);
+  assert.equal(summary.columnStyles[0].cellWidth, summary.columnStyles[1].cellWidth);
+  assert.equal(
+    summary.columnStyles[0].cellWidth + summary.columnStyles[1].cellWidth,
+    297 - 2 * 14,
+  );
   assert.doesNotMatch(
     JSON.stringify(summary),
-    /Errores individuales|No forzados\/colectivos|Rec 0|NF 0/,
+    /Errores nuestros|Errores rival|->|\bSaq\s|\bAtq\s|\bRec\s|\bNF\s/,
   );
 });
 

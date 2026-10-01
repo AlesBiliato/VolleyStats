@@ -329,34 +329,39 @@ export function renderMatchPdf(report, dependencies) {
   };
   const drawOwnErrorsSummary = (period) => {
     const metrics = period.general.total.metrics;
-    const individualErrors = metrics.individualErrors;
-    const unforcedErrors = period.errors.unforcedTotal;
     const rivalServeErrors =
       period.errors.rival.find(({ key }) => key === "serve")?.count || 0;
     const rivalAttackErrors =
       period.errors.rival.find(({ key }) => key === "attack")?.count || 0;
-    const ourTotal = individualErrors + unforcedErrors;
-    const rivalTotal = rivalServeErrors + rivalAttackErrors;
+    const ourTotal =
+      metrics.serveErrors + metrics.attackErrors + metrics.receptionErrors;
+    const rivalTotal = rivalServeErrors + rivalAttackErrors + metrics.aces;
+    const summaryColumnWidth = (pageWidth - margin * 2) / 2;
     table({
       head: [[
-        `Errores nuestros -> ${ourTotal}`,
-        `Errores rival -> ${rivalTotal}`,
+        `Errores ${report.header.rosterName}: ${ourTotal}`,
+        `Errores ${report.header.rival}: ${rivalTotal}`,
       ]],
       body: [[
-        `Saq ${metrics.serveErrors} · Atq ${metrics.attackErrors} · Rec ${metrics.receptionErrors} · NF ${unforcedErrors}`,
-        `Saq ${rivalServeErrors} · Atq ${rivalAttackErrors}`,
+        `Saques ${metrics.serveErrors} · Ataques ${metrics.attackErrors} · Recepciones ${metrics.receptionErrors}`,
+        `Saques ${rivalServeErrors} · Ataques ${rivalAttackErrors} · Recepciones ${metrics.aces}`,
       ]],
       styles: { fontSize: 9, cellPadding: 2, halign: "center" },
       headStyles: {
         fillColor: PDF_COLORS.primaryDark,
         textColor: PDF_COLORS.white,
         fontStyle: "bold",
+        overflow: "ellipsize",
       },
       bodyStyles: {
         fillColor: PDF_COLORS.soft,
         textColor: PDF_COLORS.text,
         fontStyle: "bold",
         fontSize: 12,
+      },
+      columnStyles: {
+        0: { cellWidth: summaryColumnWidth },
+        1: { cellWidth: summaryColumnWidth },
       },
     });
   };
