@@ -55,17 +55,26 @@ try{
   for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){await page.setViewportSize({width,height});const layout=await page.evaluate(()=>{const header=document.querySelector('#app > header').getBoundingClientRect(),logo=document.querySelector('.brand-logo').getBoundingClientRect();return {headerInside:header.left>=0&&header.right<=innerWidth+1&&header.top>=0&&header.bottom<=innerHeight+1,logoInside:logo.left>=header.left-1&&logo.right<=header.right+1&&logo.top>=header.top-1&&logo.bottom<=header.bottom+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,ratio:logo.width/logo.height};});assert.equal(layout.headerInside,true,`${width}x${height} cabecera visible`);assert.equal(layout.logoInside,true,`${width}x${height} logo dentro de cabecera`);assert.equal(layout.pageOverflow,false,`${width}x${height} sin overflow horizontal`);assert(Math.abs(layout.ratio-1)<0.01,`${width}x${height} logo sin deformar`);}
   await page.setViewportSize({width:1024,height:600});
  });
- await check('Primera entrada, multiples plantillas y datos basicos del partido',async()=>{
+ await check('Bienvenida sin plantillas, creación y datos básicos del partido',async()=>{
   await page.goto(url);
   await page.evaluate(()=>localStorage.clear());
   await page.reload();
 
   assert.match(
    await page.locator('main').innerText(),
-   /Configura tu equipo/,
+   /Bienvenido a VolleyStats/,
   );
+  assert.match(await page.locator('main').innerText(),/Aún no tienes ninguna plantilla/);
+  assert.match(await page.locator('main').innerText(),/Primero crea una plantilla para empezar/);
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),true);
+  assert.equal(await page.locator('#match-basics-form').count(),0);
+  await page.locator('[data-cmd="continue-welcome"]').dispatchEvent('click');
+  assert.equal(await page.locator('#match-basics-form').count(),0);
 
   equal(await state(),null);
+
+  await tap('new-roster');
+  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
 
   for(let id=21;id<=26;id++){
    await tap('add-roster-player');
@@ -84,8 +93,11 @@ try{
   );
 
   equal(rosters.length,1);
-
-  await tap('use-roster:'+rosters[0].id);
+  assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);
+  assert.equal(await page.locator(`[data-cmd="select-roster:${rosters[0].id}"]`).getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),false);
+  assert.equal(await page.locator('#match-basics-form').count(),0);
+  await tap('continue-welcome');
 
   await page.locator('[name="rival"]').fill(
    'Rival temporal',
@@ -196,12 +208,151 @@ try{
 
   assert.match(
    await page.locator('main').innerText(),
-   /Selecciona una plantilla/,
+   /Bienvenido a VolleyStats/,
   );
 
   equal(await state(),null);
 
   await page.evaluate(()=>localStorage.clear());
+ });
+
+ await check('Bienvenida selecciona una sola plantilla, permite cancelar y es responsive',async()=>{
+  const players=initial().roster;
+  await page.goto(url);
+  await page.evaluate((players)=>{
+   localStorage.clear();
+   localStorage.setItem('volleystats.rosters.v1',JSON.stringify([
+    {id:'roster-a',name:'Club Deportivo Voleibol Ciudad Universitaria del Norte',players},
+    {id:'roster-b',name:'Plantilla B',players},
+    {id:'roster-c',name:'Plantilla C',players},
+   ]));
+  },players);
+  await page.reload();
+
+  assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);
+  assert.equal(await page.locator('.welcome-roster-card').count(),3);
+  assert.equal(await page.locator('.welcome-roster-option[aria-pressed="true"]').count(),0);
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),true);
+
+  await tap('select-roster:roster-b');
+  assert.equal(await page.locator('#match-basics-form').count(),0,'seleccionar no avanza');
+  assert.equal(await page.locator('.welcome-roster-option[aria-pressed="true"]').count(),1);
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-b"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-a"]').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),false);
+  await tap('select-roster:roster-c');
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-b"]').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-c"]').getAttribute('aria-pressed'),'true');
+  await tap('select-roster:roster-b');
+
+  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(({width,height})=>{
+    const card=document.querySelector('.welcome-card').getBoundingClientRect();
+    const proceed=document.querySelector('[data-cmd="continue-welcome"]').getBoundingClientRect();
+    const controls=[...document.querySelectorAll('.welcome-roster-option,.welcome-roster-tools button,.welcome-toolbar button,[data-cmd="continue-welcome"]')].map(control=>{const box=control.getBoundingClientRect();return {height:box.height,left:box.left,right:box.right};});
+    return {
+     horizontal:document.documentElement.scrollWidth>width+1,
+     cardInside:card.left>=-1&&card.right<=width+1&&card.top>=-1&&card.bottom<=height+1,
+     proceedInside:proceed.top>=-1&&proceed.bottom<=height+1,
+     controls,
+    };
+   },{width,height});
+   assert.equal(layout.horizontal,false,`${width}x${height} sin overflow horizontal`);
+   assert.equal(layout.cardInside,true,`${width}x${height} tarjeta visible`);
+   assert.equal(layout.proceedInside,true,`${width}x${height} Continuar visible`);
+   for(const control of layout.controls){assert(control.height>=43.5);assert(control.left>=-1&&control.right<=width+1);}
+  }
+
+  await page.setViewportSize({width:1024,height:600});
+  const rosterCount=await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')).length);
+  await tap('new-roster');
+  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+  await tap('cancel-new-roster');
+  assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1')).length),rosterCount);
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-b"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#match-basics-form').count(),0);
+
+  await tap('continue-welcome');
+  assert.match(await page.locator('.setup-roster-reference').innerText(),/Plantilla B/);
+  assert.equal(await page.locator('[data-cmd^="select-roster:"]').count(),0);
+  assert.equal(await page.locator('#match-basics-form').count(),1);
+  await tap('back-to-welcome');
+  assert.equal(await page.locator('[data-cmd="select-roster:roster-b"]').getAttribute('aria-pressed'),'true');
+ });
+
+ await check('Bienvenida con muchas plantillas conserva acceso y scroll vertical',async()=>{
+  const players=initial().roster;
+  await page.goto(url);
+  await page.evaluate((players)=>{
+   localStorage.clear();
+   const rosters=Array.from({length:15},(_,index)=>({
+    id:`many-${String(index+1).padStart(2,'0')}`,
+    name:`Plantilla ${String(index+1).padStart(2,'0')}`,
+    players,
+   }));
+   localStorage.setItem('volleystats.rosters.v1',JSON.stringify(rosters));
+  },players);
+  await page.reload();
+
+  let scrollRequired=false;
+  for(const [width,height] of [[768,1024],[1024,768],[1024,600],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const main=page.locator('.welcome-stage');
+   await main.evaluate(element=>element.scrollTo(0,0));
+   const top=await page.evaluate(({width,height})=>{
+    const stage=document.querySelector('.welcome-stage');
+    const stageBox=stage.getBoundingClientRect();
+    const heading=document.querySelector('.welcome-heading h1').getBoundingClientRect();
+    const first=document.querySelector('.welcome-roster-card').getBoundingClientRect();
+    return {
+     horizontal:document.documentElement.scrollWidth>width+1||stage.scrollWidth>stage.clientWidth+1,
+     headingAccessible:heading.top>=stageBox.top-1&&heading.bottom<=Math.min(stageBox.bottom,height)+1,
+     firstAccessible:first.top>=stageBox.top-1&&first.bottom<=Math.min(stageBox.bottom,height)+1,
+     contentStartsInside:document.querySelector('.welcome-card').getBoundingClientRect().top>=stageBox.top-1,
+     needsScroll:stage.scrollHeight>stage.clientHeight+1,
+    };
+   },{width,height});
+   assert.equal(top.horizontal,false,`${width}x${height} sin overflow horizontal`);
+   assert.equal(top.headingAccessible,true,`${width}x${height} cabecera accesible`);
+   assert.equal(top.firstAccessible,true,`${width}x${height} primera plantilla accesible`);
+   assert.equal(top.contentStartsInside,true,`${width}x${height} contenido no queda por encima`);
+   scrollRequired ||= top.needsScroll;
+
+   await main.evaluate(element=>element.scrollTo(0,element.scrollHeight));
+   const bottom=await page.evaluate(({height})=>{
+    const stage=document.querySelector('.welcome-stage');
+    const stageBox=stage.getBoundingClientRect();
+    const last=document.querySelector('.welcome-roster-card:last-child').getBoundingClientRect();
+    const proceed=document.querySelector('[data-cmd="continue-welcome"]').getBoundingClientRect();
+    const controls=[...document.querySelectorAll('.welcome-roster-option,.welcome-roster-tools button,[data-cmd="continue-welcome"]')].map(control=>control.getBoundingClientRect().height);
+    return {
+     lastAccessible:last.top<Math.min(stageBox.bottom,height)&&last.bottom<=Math.min(stageBox.bottom,height)+1,
+     proceedAccessible:proceed.top>=stageBox.top-1&&proceed.bottom<=Math.min(stageBox.bottom,height)+1,
+     scrollTop:stage.scrollTop,
+     needsScroll:stage.scrollHeight>stage.clientHeight+1,
+     tactile:controls.every(value=>value>=43.5),
+    };
+   },{height});
+   assert.equal(bottom.lastAccessible,true,`${width}x${height} última plantilla alcanzable`);
+   assert.equal(bottom.proceedAccessible,true,`${width}x${height} Continuar alcanzable`);
+   assert.equal(bottom.tactile,true,`${width}x${height} controles táctiles`);
+   if(bottom.needsScroll)assert(bottom.scrollTop>0,`${width}x${height} permite scroll vertical`);
+
+   await main.evaluate(element=>element.scrollTo(0,0));
+   assert.equal(await page.locator('.welcome-heading h1').isVisible(),true);
+  }
+  assert.equal(scrollRequired,true,'el contenido alto activa scroll vertical');
+
+  await page.setViewportSize({width:1024,height:600});
+  await page.locator('.welcome-stage').evaluate(element=>element.scrollTo(0,element.scrollHeight));
+  await tap('select-roster:many-15');
+  assert.equal(await page.locator('[data-cmd="select-roster:many-15"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),false);
+  await page.locator('.welcome-stage').evaluate(element=>element.scrollTo(0,element.scrollHeight));
+  await tap('continue-welcome');
+  assert.match(await page.locator('.setup-roster-reference').innerText(),/Plantilla 15/);
  });
 
  await check('Renombrar plantillas guardadas',async()=>{
@@ -302,7 +453,7 @@ try{
 
   await page.reload();
 
-  equal(await page.locator('.roster-grid article').count(),2);
+  equal(await page.locator('.welcome-roster-card').count(),2);
 
   await tap('delete-roster:roster-a');
   assert.match(await page.locator('#modal').innerText(),/Equipo A/);
@@ -318,7 +469,7 @@ try{
   await tap('delete-roster:roster-a');
   await tap('confirm-delete-roster:roster-a');
 
-  equal(await page.locator('.roster-grid article').count(),1);
+  equal(await page.locator('.welcome-roster-card').count(),1);
 
   await page.reload();
 
@@ -328,7 +479,8 @@ try{
   await tap('delete-roster:roster-b');
   await tap('confirm-delete-roster:roster-b');
 
-  assert.match(await page.locator('main').innerText(),/Configura tu equipo/);
+  assert.match(await page.locator('main').innerText(),/Aún no tienes ninguna plantilla/);
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),true);
 
   await page.evaluate(()=>localStorage.clear());
  });
@@ -721,7 +873,7 @@ try{
   await page.reload();await page.locator('.court').waitFor();await tap('nav:roster');assert.equal(await playerRow(7).count(),0);assert.equal(await playerRow(1).count(),0);
  });
  await check('Eliminar jugador limpia titulares y libero de un setup sin crear',async()=>{
-  const players=initial().roster;await page.goto(url);await page.evaluate(players=>{localStorage.clear();localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'setup-delete-roster',name:'Setup borrado',players}]));},players);await page.reload();await tap('use-roster:setup-delete-roster');await page.locator('[name="rival"]').fill('Rival setup');await page.locator('[name="date"]').evaluate(input=>{input.value='2026-09-29'});await page.locator('[name="time"]').evaluate(input=>{input.value='18:00'});await page.locator('[name="venue"]').evaluate(input=>{input.value='home'});await page.locator('#match-basics-form button[type="submit"]').click();await tap('prepare-set-1');for(const [zone,id] of [[1,4],[2,9],[3,12],[4,7],[5,8],[6,15]]){await tap(`set-zone:${zone}`);await tap(`choose-lineup-player:${zone},${id}`);}await tap('continue-lineup');await tap('set-libero:1');await tap('continue-libero');await tap('back-to-lineup');await tap('back-to-match-summary');await tap('edit-match-basics');await tap('manage-roster');
+  const players=initial().roster;await page.goto(url);await page.evaluate(players=>{localStorage.clear();localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'setup-delete-roster',name:'Setup borrado',players}]));},players);await page.reload();await tap('select-roster:setup-delete-roster');await tap('continue-welcome');await page.locator('[name="rival"]').fill('Rival setup');await page.locator('[name="date"]').evaluate(input=>{input.value='2026-09-29'});await page.locator('[name="time"]').evaluate(input=>{input.value='18:00'});await page.locator('[name="venue"]').evaluate(input=>{input.value='home'});await page.locator('#match-basics-form button[type="submit"]').click();await tap('prepare-set-1');for(const [zone,id] of [[1,4],[2,9],[3,12],[4,7],[5,8],[6,15]]){await tap(`set-zone:${zone}`);await tap(`choose-lineup-player:${zone},${id}`);}await tap('continue-lineup');await tap('set-libero:1');await tap('continue-libero');await tap('back-to-lineup');await tap('back-to-match-summary');await tap('edit-match-basics');await tap('manage-roster');
   await tap('delete-roster-player:4');await tap('confirm-delete-roster-player:4');await tap('delete-roster-player:1');await tap('confirm-delete-roster-player:1');assert.equal(await page.locator('.roster-grid article[data-player-id="4"],.roster-grid article[data-player-id="1"]').count(),0);await tap('confirm-roster');await page.locator('#match-basics-form button[type="submit"]').click();await tap('prepare-set-1');assert.match(await page.locator('.lineup-progress').innerText(),/5\s*\/\s*6/);assert.equal(await page.locator('.setup-lineup-player[data-setup-zone="1"].empty').count(),1);await tap('set-zone:1');await tap('choose-lineup-player:1,6');await tap('continue-lineup');assert.equal(await page.locator('[data-cmd="set-libero:1"]').count(),0);assert.equal(await page.locator('[data-cmd="set-libero:none"].selected').count(),1);assert.equal(await state(),null);
  });
  await check('G-P y recepción siguen el criterio de puntos terminales',async()=>{
@@ -922,14 +1074,15 @@ try{
 
   await page.reload();
 
-  await page.locator('.setup-card').waitFor({timeout:3000});
+  await page.locator('.welcome-card').waitFor({timeout:3000});
 
   assert.match(
    await page.locator('[role="alert"]').innerText(),
    /almacenamiento/,
   );
 
-  await tap('use-roster:test-roster');
+  await tap('select-roster:test-roster');
+  await tap('continue-welcome');
 
   await page.locator('[name="rival"]').fill('Nuevo rival');
 
@@ -983,7 +1136,8 @@ try{
    localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'setup-roster',name:'Setup',players}]));
   });
   await page.reload();
-  await tap('use-roster:setup-roster');
+  await tap('select-roster:setup-roster');
+  await tap('continue-welcome');
   await page.locator('[name="rival"]').fill('Rival setup');
   await page.locator('[name="date"]').evaluate((input)=>{input.value='2026-09-24'});
   await page.locator('[name="time"]').evaluate((input)=>{input.value='18:00'});
@@ -1060,6 +1214,11 @@ try{
   equal(created.score,[0,0]);
   assert.equal(created.setStarts[0].serving,true);
   equal((await page.locator('.match-title').innerText()).replace(/\s+/g,' ').trim(),'Setup vs Rival setup');
+  await page.reload();
+  await page.locator('.court').waitFor();
+  equal(await state(),created);
+  assert.equal(await page.locator('.welcome-card').count(),0,'la recarga restaura el partido sin bienvenida');
+  assert.equal(await page.locator('[data-cmd="continue-welcome"]').count(),0);
 
   await tap('theirs');
   await commit('ours');

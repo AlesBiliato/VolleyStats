@@ -828,19 +828,189 @@ footer b {
   margin-top: 22px;
 }
 
-/* Selector de plantillas guardadas */
-.saved-rosters-grid {
-  grid-template-columns: 1fr;
+/* Bienvenida y selección de plantilla */
+#app > main.welcome-stage {
+  justify-content: flex-start;
+  overflow-y: auto;
 }
-
-.saved-rosters-grid article {
+#app > main.welcome-stage > .welcome-card {
   width: 100%;
+  max-width: 1080px;
+  flex: 0 0 auto;
+  margin: auto;
+  overflow: visible;
 }
-
-.saved-rosters-grid article > .dialog-actions {
-  margin-top: 0;
-  margin-left: auto;
-  flex-shrink: 0;
+.welcome-heading {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.welcome-heading > img {
+  width: 78px;
+  height: 78px;
+  flex: none;
+  object-fit: contain;
+}
+.welcome-heading h1 {
+  overflow-wrap: anywhere;
+}
+.welcome-heading p {
+  margin: 7px 0 0;
+}
+.welcome-toolbar,
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.welcome-toolbar {
+  margin-top: 24px;
+}
+.welcome-toolbar h2 {
+  margin: 0;
+}
+.welcome-toolbar button,
+.welcome-empty button,
+.welcome-continue {
+  min-height: 48px;
+}
+.welcome-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.welcome-roster-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--brand-border);
+  border-radius: 13px;
+  background: var(--brand-pale);
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.welcome-roster-card.selected {
+  border-color: var(--brand-primary);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 3px #036eed1f;
+}
+.welcome-roster-option {
+  width: 100%;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.welcome-roster-option[aria-pressed="true"] {
+  color: var(--brand-primary-dark);
+}
+.welcome-roster-name {
+  max-width: 100%;
+  color: var(--brand-primary-dark);
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.welcome-roster-option > span:last-child {
+  color: var(--brand-muted);
+  font-size: 11px;
+}
+.welcome-roster-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 0 10px 10px;
+}
+.welcome-roster-tools button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  background: white;
+  font-size: 11px;
+}
+.welcome-empty {
+  margin-top: 24px;
+  padding: clamp(30px, 7vh, 64px) 20px;
+  border: 1px dashed var(--brand-border);
+  border-radius: 13px;
+  background: var(--brand-pale);
+  text-align: center;
+}
+.welcome-empty h2 {
+  margin: 0;
+}
+.welcome-empty p {
+  margin: 8px 0 20px;
+}
+.welcome-footer {
+  position: sticky;
+  bottom: -28px;
+  z-index: 1;
+  margin: 24px -28px -28px;
+  padding: 18px 28px 28px;
+  border-top: 1px solid var(--border);
+  background: white;
+}
+.welcome-footer p {
+  margin: 0;
+}
+.welcome-continue {
+  min-width: 170px;
+}
+@media (max-width: 900px) {
+  .welcome-roster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .welcome-heading {
+    align-items: flex-start;
+  }
+  .welcome-heading > img {
+    width: 58px;
+    height: 58px;
+  }
+  .welcome-toolbar,
+  .welcome-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .welcome-roster-grid {
+    grid-template-columns: 1fr;
+  }
+  .welcome-continue {
+    width: 100%;
+  }
+}
+@media (max-height: 700px) {
+  .welcome-heading {
+    gap: 14px;
+    padding-bottom: 14px;
+  }
+  .welcome-heading > img {
+    width: 56px;
+    height: 56px;
+  }
+  .welcome-toolbar,
+  .welcome-roster-grid {
+    margin-top: 12px;
+  }
+  .welcome-footer {
+    margin-top: 14px;
+  }
 }
 .roster-grid article {
   display: flex;
@@ -2376,6 +2546,10 @@ dialog.stats-dialog {
   color: var(--brand-muted);
   font-size: 12px;
 }
+.setup-roster-actions {
+  display: flex;
+  gap: 8px;
+}
 
 .setup-section {
   margin-top: 24px;
@@ -2667,6 +2841,11 @@ dialog.stats-dialog {
   .setup-roster-reference {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .setup-roster-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .setup-lineup,

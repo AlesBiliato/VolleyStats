@@ -17,6 +17,8 @@ let hasMatch = false;
 let savedRosters = [];
 let selectedRosterId = null;
 let creatingRoster = false;
+let returnToWelcomeAfterRoster = false;
+let rosterSelectionBeforeCreate = null;
 let matchDraft = null;
 let setupStep = "basics";
 let calendarCursor = null;
@@ -29,12 +31,10 @@ let preparingSetNumber = 1;
 try {
   savedRosters = loadRosters();
   teamRoster = [];
-  creatingRoster = savedRosters.length === 0;
 } catch {
   storageError = true;
   savedRosters = [];
   teamRoster = [];
-  creatingRoster = true;
 }
 
 try {
@@ -104,7 +104,7 @@ let statsTab = "General",
   statsSet = "all",
   periodOpen = false,
   pendingCorrection = null;
-let page = hasMatch && state.demo ? "setup" : "match",
+let page = hasMatch ? (state.demo ? "setup" : "match") : "welcome",
   selected = null,
   action = null,
   keyboardJerseyBuffer = "",
@@ -693,7 +693,10 @@ function matchBasicsContent(rosterName) {
       <h2>2. Datos del partido</h2>
       <div class="setup-roster-reference">
         <span>Plantilla: <b>${esc(rosterName)}</b></span>
-        ${button("Gestionar plantilla", "manage-roster")}
+        <div class="setup-roster-actions">
+          ${button("Cambiar plantilla", "back-to-welcome")}
+          ${button("Gestionar plantilla", "manage-roster")}
+        </div>
       </div>
 
       <form id="match-basics-form">
@@ -1052,11 +1055,9 @@ function renderSetup() {
               !teamRoster.length,
             )}
 
-            ${
-              savedRosters.length
-                ? button("Volver a plantillas", "cancel-new-roster")
-                : ""
-            }
+            ${returnToWelcomeAfterRoster
+              ? button("Volver a bienvenida", "cancel-new-roster")
+              : ""}
           </div>
 
           <p class="muted">
@@ -1123,6 +1124,8 @@ function activateMatch(next) {
   }
 
   creatingRoster = false;
+  returnToWelcomeAfterRoster = false;
+  rosterSelectionBeforeCreate = null;
   hasMatch = true;
   preparingSetNumber = 1;
   page = "match";
@@ -1178,10 +1181,14 @@ document.addEventListener("submit", e => {
   render();
 });
 
-function renderRosterSelector() {
+function renderWelcome() {
+  const selectedRoster = savedRosters.find(
+    (roster) => roster.id === selectedRosterId,
+  );
+
   app.innerHTML = `
     <header>
-      ${brandLink()}
+      ${brandLink(hasMatch ? "nav:match" : "")}
 
       <div class="save-state">
         <i></i>
@@ -1189,16 +1196,15 @@ function renderRosterSelector() {
       </div>
     </header>
 
-    <main>
-      <section class="wide-card setup-card">
-        <div class="card-title">
+    <main class="welcome-stage">
+      <section class="wide-card welcome-card">
+        <div class="welcome-heading">
+          <img src="./src/assets/logo.png" alt="" width="1254" height="1254" />
           <div>
             <span class="eyebrow">VOLLEYSTATS</span>
-            <h1>Selecciona una plantilla</h1>
-            <p>Elige el equipo que vas a utilizar para preparar el partido.</p>
+            <h1>Bienvenido a VolleyStats</h1>
+            <p>Selecciona la plantilla con la que vas a trabajar.</p>
           </div>
-
-          ${button("+ Nueva plantilla", "new-roster", "primary")}
         </div>
 
         ${
@@ -1207,31 +1213,52 @@ function renderRosterSelector() {
             : ""
         }
 
-        <div class="roster-grid saved-rosters-grid">
-          ${[...savedRosters]
-            .sort((a, b) => a.name.localeCompare(b.name, "es"))
-            .map(
-              (roster) => `
-                <article>
-                  <div>
-                    <h3>${esc(roster.name)}</h3>
-                    <p>${roster.players.length} ${roster.players.length === 1 ? "jugador" : "jugadores"}</p>
-                  </div>
+        ${
+          savedRosters.length
+            ? `<div class="welcome-toolbar">
+                <h2>Plantillas disponibles</h2>
+                ${button("+ Crear plantilla", "new-roster", "primary")}
+              </div>
+              <div class="welcome-roster-grid" role="group" aria-label="Plantillas disponibles">
+                ${[...savedRosters]
+                  .sort((a, b) => a.name.localeCompare(b.name, "es"))
+                  .map(
+                    (roster) => `
+                      <article class="welcome-roster-card${roster.id === selectedRosterId ? " selected" : ""}">
+                        <button
+                          type="button"
+                          class="welcome-roster-option"
+                          data-cmd="select-roster:${roster.id}"
+                          aria-pressed="${roster.id === selectedRosterId}"
+                        >
+                          <span class="welcome-roster-name">${esc(roster.name)}</span>
+                          <span>${roster.players.length} ${roster.players.length === 1 ? "jugador" : "jugadores"}</span>
+                        </button>
+                        <div class="welcome-roster-tools" aria-label="Gestionar ${esc(roster.name)}">
+                          ${button("Renombrar", `rename-roster:${roster.id}`)}
+                          ${button("Eliminar", `delete-roster:${roster.id}`)}
+                        </div>
+                      </article>
+                    `,
+                  )
+                  .join("")}
+              </div>`
+            : `<div class="welcome-empty">
+                <h2>Aún no tienes ninguna plantilla.</h2>
+                <p>Primero crea una plantilla para empezar.</p>
+                ${button("+ Crear plantilla", "new-roster", "primary")}
+              </div>`
+        }
 
-                  <div class="dialog-actions">
-                    ${button("Usar plantilla", `use-roster:${roster.id}`, "primary")}
-                    ${button("Renombrar", `rename-roster:${roster.id}`)}
-                    ${button("Eliminar", `delete-roster:${roster.id}`)}
-                  </div>
-                </article>
-              `,
-            )
-            .join("")}
+        <div class="welcome-footer">
+          <p class="muted">Las plantillas se guardan solamente en este dispositivo.</p>
+          ${button(
+            "Continuar",
+            "continue-welcome",
+            "primary welcome-continue",
+            !selectedRoster,
+          )}
         </div>
-
-        <p class="muted">
-          Las plantillas se guardan solamente en este dispositivo.
-        </p>
       </section>
     </main>
   `;
@@ -1303,17 +1330,12 @@ function render() {
   if (page !== "match" || state.status !== "playing") {
     keyboardJerseyBuffer = "";
   }
-  if (
-    !hasMatch &&
-    savedRosters.length &&
-    !selectedRosterId &&
-    !creatingRoster
-  ) {
-    renderRosterSelector();
+  if (page === "welcome" && !creatingRoster) {
+    renderWelcome();
     return;
   }
 
-  if ((!hasMatch && page !== "roster") || page === "setup") {
+  if (creatingRoster || page === "setup") {
     renderSetup();
     return;
   }
@@ -1669,11 +1691,49 @@ document.addEventListener("click", (e) => {
   const [cmd, value] = target.dataset.cmd.split(":");
   if (cmd === "new-match") {
     returnToSetupAfterRoster = false;
+    returnToWelcomeAfterRoster = false;
+    rosterSelectionBeforeCreate = null;
+    selectedRosterId = null;
+    teamRoster = [];
+    creatingRoster = false;
     matchDraft = null;
     setLineupDraft = Array(6).fill(null);
     preparingSetNumber = 1;
     setupStep = "basics";
+    page = "welcome";
+    render();
+    return;
+  }
+  if (cmd === "select-roster") {
+    const roster = savedRosters.find((item) => item.id === value);
+    if (!roster) {
+      toast("No se encontró la plantilla.");
+      return;
+    }
+    selectedRosterId = roster.id;
+    teamRoster = structuredClone(roster.players);
+    render();
+    return;
+  }
+  if (cmd === "continue-welcome") {
+    const roster = savedRosters.find(
+      (item) => item.id === selectedRosterId,
+    );
+    if (!roster) return;
+    teamRoster = structuredClone(roster.players);
+    creatingRoster = false;
+    returnToWelcomeAfterRoster = false;
+    rosterSelectionBeforeCreate = null;
+    setLineupDraft = Array(6).fill(null);
+    setupStep = "basics";
     page = "setup";
+    render();
+    return;
+  }
+  if (cmd === "back-to-welcome") {
+    captureMatchBasicsDraft();
+    returnToSetupAfterRoster = false;
+    page = "welcome";
     render();
     return;
   }
@@ -2173,9 +2233,12 @@ document.addEventListener("click", (e) => {
 
     modal.close();
 
-    teamRoster = [];
-    selectedRosterId = null;
+    selectedRosterId = newRoster.id;
+    teamRoster = structuredClone(newRoster.players);
     creatingRoster = false;
+    rosterSelectionBeforeCreate = null;
+    if (returnToWelcomeAfterRoster) page = "welcome";
+    returnToWelcomeAfterRoster = false;
 
     render();
     toast(`Plantilla "${name}" guardada.`);
@@ -2183,9 +2246,17 @@ document.addEventListener("click", (e) => {
   }
 
   if (cmd === "cancel-new-roster") {
-    teamRoster = [];
-    selectedRosterId = null;
+    const previousRoster = savedRosters.find(
+      (roster) => roster.id === rosterSelectionBeforeCreate,
+    );
+    selectedRosterId = previousRoster?.id || null;
+    teamRoster = previousRoster
+      ? structuredClone(previousRoster.players)
+      : [];
     creatingRoster = false;
+    rosterSelectionBeforeCreate = null;
+    if (returnToWelcomeAfterRoster) page = "welcome";
+    returnToWelcomeAfterRoster = false;
     render();
     return;
   }
@@ -2357,9 +2428,14 @@ document.addEventListener("click", (e) => {
 
     if (!savedRosters.length) {
       selectedRosterId = null;
-      teamRoster = [];
-      creatingRoster = true;
-      page = "setup";
+      creatingRoster = false;
+      if (hasMatch && page === "roster" && !returnToSetupAfterRoster) {
+        teamRoster = structuredClone(state.roster);
+        page = "match";
+      } else {
+        teamRoster = [];
+        page = "welcome";
+      }
     }
 
     render();
@@ -2367,27 +2443,9 @@ document.addEventListener("click", (e) => {
     return;
   }
 
-  if (cmd === "use-roster") {
-    const roster = savedRosters.find((item) => item.id === value);
-
-    if (!roster) {
-      toast("No se encontr\u00f3 la plantilla.");
-      return;
-    }
-
-    selectedRosterId = roster.id;
-    teamRoster = structuredClone(roster.players);
-    creatingRoster = false;
-    returnToSetupAfterRoster = false;
-    matchDraft = null;
-    setLineupDraft = Array(6).fill(null);
-    setupStep = "basics";
-    page = "setup";
-    render();
-    return;
-  }
-
   if (cmd === "new-roster") {
+    rosterSelectionBeforeCreate = selectedRosterId;
+    returnToWelcomeAfterRoster = page === "welcome";
     selectedRosterId = null;
     teamRoster = [];
     creatingRoster = true;
