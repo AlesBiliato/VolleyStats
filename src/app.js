@@ -123,6 +123,7 @@ let page = hasMatch ? (state.demo ? "setup" : "match") : "welcome",
 const app = document.querySelector("#app"),
   modal = document.querySelector("#modal");
 let recentActionsObserver = null;
+document.addEventListener("fullscreenchange", syncFullscreenControl);
 modal.addEventListener("close", () => {
   if (modal.dataset.context === "action") {
     selected = null;
@@ -144,6 +145,40 @@ const esc = (s) =>
   );
 function brandLink(command = "") {
   return `<a class="brand" href="#"${command ? ` data-cmd="${command}"` : ""}><img class="brand-logo" src="./src/assets/logo.png" alt="VolleyStats" width="1254" height="1254"><span class="brand-name" aria-hidden="true">Volley<span>Stats</span></span></a>`;
+}
+function fullscreenAvailable() {
+  return Boolean(
+    document.fullscreenEnabled &&
+      typeof document.documentElement?.requestFullscreen === "function" &&
+      typeof document.exitFullscreen === "function",
+  );
+}
+function fullscreenControl() {
+  if (!fullscreenAvailable()) return "";
+  const active = Boolean(document.fullscreenElement);
+  const label = active ? "Salir de pantalla completa" : "Pantalla completa";
+  return `<button type="button" class="fullscreen-control" data-cmd="toggle-fullscreen" aria-label="${label}" title="${label}">${label}</button>`;
+}
+function syncFullscreenControl() {
+  const control = document.querySelector(".fullscreen-control");
+  if (!control) return;
+  const active = Boolean(document.fullscreenElement);
+  const label = active ? "Salir de pantalla completa" : "Pantalla completa";
+  control.textContent = label;
+  control.setAttribute("aria-label", label);
+  control.title = label;
+}
+async function toggleFullscreen() {
+  if (!fullscreenAvailable()) return;
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch {
+    toast("No se pudo cambiar la pantalla completa.");
+  }
 }
 const player = (id) => state.roster.find((p) => p.id === id);
 function rosterNameForMatch(match) {
@@ -1031,6 +1066,8 @@ function renderSetup() {
       <header>
         ${brandLink()}
 
+        ${fullscreenControl()}
+
         <div class="save-state">
           <i></i>
           ${storageError ? "Guardado no disponible" : "Plantilla sin guardar"}
@@ -1100,6 +1137,7 @@ function renderSetup() {
   app.innerHTML = `
     <header>
       ${brandLink("nav:match")}
+      ${fullscreenControl()}
       <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Borrador local"}</div>
     </header>
     <main class="setup-stage setup-stage-${setupStep}">
@@ -1219,6 +1257,8 @@ function renderWelcome() {
   app.innerHTML = `
     <header>
       ${brandLink(hasMatch ? "nav:match" : "")}
+
+      ${fullscreenControl()}
 
       <div class="save-state">
         <i></i>
@@ -1435,6 +1475,7 @@ function renderMatches() {
         ${button("Archivo", "nav:matches", "active")}
         ${hasMatch ? button("Plantilla", "nav:roster") : ""}
       </nav>
+      ${fullscreenControl()}
       <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Guardado en este dispositivo"}</div>
     </header>
     <main class="matches-page">
@@ -1478,6 +1519,8 @@ function render() {
         ${button("Archivo", "nav:matches", page === "matches" ? "active" : "")}
         ${button("Plantilla", "nav:roster", page === "roster" ? "active" : "")}
       </nav>
+
+      ${fullscreenControl()}
 
       <div class="save-state">
         <i></i>
@@ -1806,6 +1849,10 @@ document.addEventListener("click", (e) => {
   if (!target) return;
   e.preventDefault();
   const [cmd, value] = target.dataset.cmd.split(":");
+  if (cmd === "toggle-fullscreen") {
+    void toggleFullscreen();
+    return;
+  }
   if (["welcome-page", "archive-page", "roster-page"].includes(cmd)) {
     const direction = value === "next" ? 1 : -1;
     if (cmd === "welcome-page") welcomeRosterPage += direction;

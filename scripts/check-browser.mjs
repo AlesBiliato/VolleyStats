@@ -76,6 +76,30 @@ try{
   const favicon=await page.evaluate(async()=>{const href=document.querySelector('link[rel~="icon"]').href,response=await fetch(href),blob=await response.blob(),image=await createImageBitmap(blob),canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const context=canvas.getContext('2d');context.drawImage(image,0,0);const pixels=context.getImageData(0,0,image.width,image.height).data,alpha=[];let opaqueWhite=0;for(let index=0;index<pixels.length;index+=4){alpha.push(pixels[index+3]);if(pixels[index+3]===255&&pixels[index]>=245&&pixels[index+1]>=245&&pixels[index+2]>=245)opaqueWhite++;}const cornerAlpha=[pixels[3],pixels[(image.width-1)*4+3],pixels[(image.width*(image.height-1))*4+3],pixels[(image.width*image.height-1)*4+3]],result={pathname:new URL(href).pathname,status:response.status,type:response.headers.get('content-type'),blobType:blob.type,width:image.width,height:image.height,transparent:alpha.filter(value=>value===0).length,opaque:alpha.filter(value=>value===255).length,opaqueWhite,cornerAlpha};image.close();return result;});
   assert.deepEqual({...favicon,transparent:undefined,opaque:undefined,opaqueWhite:undefined},{pathname:'/src/assets/favicon.png',status:200,type:'image/png',blobType:'image/png',width:64,height:64,transparent:undefined,opaque:undefined,opaqueWhite:undefined,cornerAlpha:[0,0,0,0]});assert(favicon.transparent>500,'el fondo exterior es transparente');assert(favicon.opaque>500,'el símbolo conserva píxeles opacos');assert(favicon.opaqueWhite>0,'se conservan detalles blancos internos');
  });
+ await check('Fullscreen de escritorio usa la API nativa y se sincroniza',async()=>{
+  await reset();
+  await page.evaluate(()=>{
+   let active=null;
+   Object.defineProperty(document,'fullscreenEnabled',{configurable:true,value:true});
+   Object.defineProperty(document,'fullscreenElement',{configurable:true,get:()=>active});
+   Object.defineProperty(document.documentElement,'requestFullscreen',{configurable:true,value:async()=>{active=document.documentElement;document.dispatchEvent(new Event('fullscreenchange'));}});
+   Object.defineProperty(document,'exitFullscreen',{configurable:true,value:async()=>{active=null;document.dispatchEvent(new Event('fullscreenchange'));}});
+  });
+  await tap('nav:matches');
+  const control=page.locator('.fullscreen-control');
+  assert.equal(await control.count(),1);
+  assert.equal(await control.getAttribute('aria-label'),'Pantalla completa');
+  await control.click();
+  assert.equal(await control.getAttribute('aria-label'),'Salir de pantalla completa');
+  assert.equal(await control.getAttribute('title'),'Salir de pantalla completa');
+  await tap('nav:match');
+  assert.equal(await page.locator('.fullscreen-control').getAttribute('aria-label'),'Salir de pantalla completa');
+  await page.locator('.fullscreen-control').click();
+  assert.equal(await page.locator('.fullscreen-control').getAttribute('aria-label'),'Pantalla completa');
+  await page.setViewportSize({width:768,height:1024});
+  assert.equal(await page.locator('.fullscreen-control').evaluate(element=>getComputedStyle(element).display),'none');
+  await page.setViewportSize({width:1024,height:600});
+ });
  await check('Logo oficial accesible y contenido en cabecera',async()=>{
   await page.goto(url);await page.evaluate(()=>localStorage.clear());await page.reload();await page.locator('.brand-logo').waitFor();
   assert.equal(await page.locator('.brand-logo').getAttribute('alt'),'VolleyStats');assert.match(await page.locator('.brand-logo').getAttribute('src'),/src\/assets\/logo\.png$/);assert.deepEqual(await page.locator('.brand-logo').evaluate(image=>({complete:image.complete,width:image.naturalWidth,height:image.naturalHeight})),{complete:true,width:1254,height:1254});
