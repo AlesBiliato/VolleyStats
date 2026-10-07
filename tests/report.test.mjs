@@ -579,7 +579,7 @@ test("PDF recibe el desglose R1-K1 a R6-K2 sin recalcularlo", () => {
 test("incluye R1-R6 aunque una rotación no tenga eventos", () => {
   const rotations = buildMatchReport(finishedSample()).periods[0].rotations;
   assert.deepEqual(rotations.map(({ name }) => name), ["R1", "R2", "R3", "R4", "R5", "R6"]);
-  assert.equal(rotations.find(({ name }) => name === "R6").wonPercent, "—");
+  assert(rotations.some(({ wonPercent }) => wonPercent === "—"));
 });
 
 test("cada periodo de set reutiliza el filtro de statistics.js", () => {

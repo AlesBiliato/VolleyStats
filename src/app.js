@@ -7,7 +7,7 @@ import {
   unforcedReasons,
 } from "./statistics.js";
 
-import { initial, transition, createMatch } from "./domain.js";
+import { initial, transition, createMatch, rotationFromLineup } from "./domain.js";
 import { loadMatch, saveMatch, loadRoster, saveRoster, loadRosters, saveRosters, loadArchives, replaceMatch } from "./storage.js";
 let teamRoster;
 let state;
@@ -100,6 +100,7 @@ try {
   storageBlocked = true;
   state = initial();
 }
+state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
 let statsTab = "General",
   statsSet = "all",
   statsSourceMatch = null,
@@ -1570,10 +1571,12 @@ function historyRows(all = false) {
     (events.length
       ? `<div class="history-list">${[...events]
           .reverse()
-          .map(
-            (e) =>
-              `<article class="history-entry"><strong class="history-score">${e.after.join(" – ")}</strong><div class="history-copy"><span class="history-label">${esc(e.label)}</span><small>Set ${e.set} · ${e.phase} · R${e.rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "libero-change", "next"].includes(e.type) ? button("Editar", "edit-event:" + state.events.indexOf(e), "edit-event") : '<small class="history-recalculated">Resultado recalculado</small>'}</article>`,
-          )
+          .map((e) => {
+            const index = state.events.indexOf(e);
+            const previous = state.undo[index];
+            const rotation = rotationFromLineup(state.roster, previous?.lineup, e.rotation);
+            return `<article class="history-entry"><strong class="history-score">${e.after.join(" – ")}</strong><div class="history-copy"><span class="history-label">${esc(e.label)}</span><small>Set ${e.set} · ${e.phase} · R${rotation} · ${new Date(e.at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</small></div>${["point", "action", "sub", "libero-change", "next"].includes(e.type) ? button("Editar", "edit-event:" + index, "edit-event") : '<small class="history-recalculated">Resultado recalculado</small>'}</article>`;
+          })
           .join("")}</div>`
       : `<div class="empty">Todavía no hay operaciones.<p>Los puntos y las acciones que registres aparecerán aquí.</p></div>`)
   );

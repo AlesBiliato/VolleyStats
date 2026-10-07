@@ -7,7 +7,57 @@ test('Errores no forzados ceden punto y saque sin rotar, y se deshacen completos
   assert.equal(n.events.at(-1).reason,reason);assert.deepEqual(transition(n,{type:'undo'}),s);
  }
 });
-test('Recuperar saque rota una vez y deshacer restaura la operación completa',()=>{const s=initial();const n=transition(s,{type:'point',team:0,label:'Punto'});assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,2);assert.deepEqual(n.lineup,[9,12,7,8,15,4]);const more=transition(n,{type:'point',team:0});assert.equal(more.rotation,2);assert.deepEqual(transition(n,{type:'undo'}),s);});
+test('Recuperar saque rota físicamente y sigue al colocador',()=>{const s=initial();const n=transition(s,{type:'point',team:0,label:'Punto'});assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,6);assert.deepEqual(n.lineup,[9,12,7,8,15,4]);const more=transition(n,{type:'point',team:0});assert.equal(more.rotation,6);assert.deepEqual(transition(n,{type:'undo'}),s);});
+test('Un side-out legacy guarda la R efectiva anterior en el evento',()=>{
+ const legacy=initial();legacy.lineup=[7,8,15,9,12,4];legacy.rotation=2;legacy.serving=false;
+ const next=transition(legacy,{type:'point',team:0,label:'Punto'});
+ assert.equal(next.events.at(-1).rotation,6);assert.equal(next.undo[0].rotation,6);assert.equal(next.rotation,5);
+});
+
+test('Undo reconcilia la R de un snapshot legacy restaurado',()=>{
+ const current=transition(initial(),{type:'point',team:0});
+ current.undo[0].lineup=[7,8,15,9,12,4];current.undo[0].rotation=2;
+ const restored=transition(current,{type:'undo'});
+ assert.deepEqual(restored.lineup,[7,8,15,9,12,4]);assert.equal(restored.rotation,6);
+ for(const lineup of [[7,8,15,9,12,11],[6,8,15,9,12,4]]){
+  current.undo[0].lineup=lineup;
+  assert.equal(transition(current,{type:'undo'}).rotation,2);
+ }
+});
+test('La rotación inicial sigue la zona del colocador',()=>{
+ for(const zone of [1,2,5]){
+  const lineup=[4,9,12,7,8,15];[lineup[0],lineup[zone-1]]=[lineup[zone-1],lineup[0]];
+  const match=createMatch({team:initial().roster,rival:'Rival',lineup,serving:false});
+  assert.equal(match.rotation,zone);
+ }
+});
+test('La secuencia completa de side-outs es R1-R6-R5-R4-R3-R2-R1',()=>{
+ let state=initial();
+ const expected=[6,5,4,3,2,1];
+ for(const rotation of expected){
+  state=transition(state,{type:'point',team:0});
+  assert.equal(state.rotation,rotation);
+  state=transition(state,{type:'point',team:1});
+ }
+});
+test('Puntos al saque y puntos rivales no cambian R',()=>{
+ let state=initial();state.serving=true;state.rotation=4;state.lineup=[7,8,15,4,9,12];
+ state=transition(state,{type:'point',team:0});assert.equal(state.rotation,4);assert.deepEqual(state.lineup,[7,8,15,4,9,12]);
+ state=transition(state,{type:'point',team:1});assert.equal(state.rotation,4);assert.deepEqual(state.lineup,[7,8,15,4,9,12]);
+});
+test('Sustituciones recalculan R y conservan el último valor en estados ambiguos',()=>{
+ const base=initial();base.lineup=[9,12,7,4,8,15];base.rotation=4;
+ const nonSetter=transition(base,{type:'sub',out:7,in:3});assert.equal(nonSetter.rotation,4);
+ const direct=transition(base,{type:'sub',out:4,in:6});assert.equal(direct.rotation,4);
+ const zero=transition(base,{type:'sub',out:4,in:11});assert.equal(zero.rotation,4);
+ const completed=transition(zero,{type:'sub',out:9,in:6});assert.equal(completed.rotation,1);assert.equal(completed.events.at(-1).rotation,4);
+ assert.equal(transition(completed,{type:'undo'}).rotation,4);assert.equal(transition(transition(completed,{type:'undo'}),{type:'undo'}).rotation,4);
+});
+test('El doble cambio funciona también en el orden inverso',()=>{
+ const base=initial();base.lineup=[9,12,7,4,8,15];base.rotation=4;
+ const twoSetters=transition(base,{type:'sub',out:9,in:6});assert.equal(twoSetters.rotation,4);
+ const completed=transition(twoSetters,{type:'sub',out:4,in:11});assert.equal(completed.rotation,1);assert.equal(completed.lineup[0],6);
+});
 test('Sustitución conserva zona y marcador, y se revierte',()=>{const s=initial();const n=transition(s,{type:'sub',out:4,in:6});assert.equal(n.lineup[0],6);assert.deepEqual(n.score,[0,0]);assert.deepEqual(transition(n,{type:'undo'}),s);});
 test('Cambiar el líbero activo solo altera el líbero y se puede deshacer',()=>{
  const s=initial();s.roster.push({id:17,name:'Segundo líbero',role:'Líbero'});s.activeLiberoId=1;s.setStarts[0].activeLiberoId=1;
@@ -61,9 +111,9 @@ test('Cada set conserva una copia independiente de su alineación y líbero inic
  assert.deepEqual(s.setStarts[0].lineup,firstLineup);
  const between=transition(s,{type:'finish',label:'Fin Set 1'});
  assert.deepEqual(between.setStarts[0].lineup,firstLineup);
- const secondLineup=[4,9,12,7,8,3];
+ const secondLineup=[9,12,7,4,8,3];
  const second=transition(between,{type:'next',lineup:secondLineup,serving:true,activeLiberoId:null,label:'Inicio Set 2'});
- assert.equal(second.set,2);assert.deepEqual(second.score,[0,0]);assert.equal(second.rotation,1);
+ assert.equal(second.set,2);assert.deepEqual(second.score,[0,0]);assert.equal(second.rotation,4);
  assert.deepEqual(second.lineup,secondLineup);assert.equal(second.serving,true);assert.equal(second.activeLiberoId,null);
  assert.deepEqual(second.setStarts[1],{set:2,lineup:secondLineup,activeLiberoId:null,serving:true});
  second.lineup[0]=6;second.serving=false;assert.deepEqual(second.setStarts[1].lineup,secondLineup);assert.equal(second.setStarts[1].serving,true);

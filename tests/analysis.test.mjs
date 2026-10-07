@@ -36,7 +36,7 @@ function rotationPhaseSample(){
 }
 test('Corregir un punto recalcula saque, rotaciones, sets y metadatos sin alterar original',()=>{
  const s=play([point(0),point(1),point(0),{type:'finish',label:'Cierre'},{type:'next',serving:false,label:'Inicio'},point(0)]);
- const n=correctEvent(s,0,point(1));assert.deepEqual(n.finishedSets[0].score,[1,2]);assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,2);assert.equal(s.rotation,2);
+ const n=correctEvent(s,0,point(1));assert.deepEqual(n.finishedSets[0].score,[1,2]);assert.deepEqual(n.score,[1,0]);assert.equal(n.rotation,6);assert.equal(s.rotation,6);
  assert.equal(n.events[1].rotation,1);assert.equal(n.events[1].phase,'K1');assert.equal(n.events[0].id,s.events[0].id);assert.equal(n.events[0].at,s.events[0].at);assert.match(n.events[3].label,/1–2/);assert.deepEqual(n.correctionUndo,s);
  let stored;globalThis.localStorage={getItem:()=>stored,setItem:(k,v)=>stored=v};saveMatch(n);assert.deepEqual(loadMatch(),n);
 });
@@ -75,13 +75,13 @@ test('Rotaciones por fase conserva el contexto previo y las 12 combinaciones',()
   'R4-K1','R4-K2','R5-K1','R5-K2','R6-K1','R6-K2',
  ]);
  assert.deepEqual(state.events.slice(0,5).map(({rotation,phase})=>[rotation,phase]),[
-  [1,'K1'],[2,'K2'],[2,'K1'],[3,'K2'],[3,'K2'],
+  [1,'K1'],[6,'K2'],[6,'K1'],[5,'K2'],[5,'K2'],
  ]);
  assert.deepEqual(rotationPhase(stats,1,'K1'),{rotation:1,name:'R1',phase:'K1',won:2,lost:1,played:3,balance:1,wonPercent:'67 %'});
- assert.deepEqual(rotationPhase(stats,2,'K1'),{rotation:2,name:'R2',phase:'K1',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
- assert.deepEqual(rotationPhase(stats,2,'K2'),{rotation:2,name:'R2',phase:'K2',won:0,lost:2,played:2,balance:-2,wonPercent:'0 %'});
- assert.deepEqual(rotationPhase(stats,3,'K2'),{rotation:3,name:'R3',phase:'K2',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
- assert.equal(rotationPhase(stats,6,'K1').wonPercent,'—');
+ assert.deepEqual(rotationPhase(stats,6,'K1'),{rotation:6,name:'R6',phase:'K1',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
+ assert.deepEqual(rotationPhase(stats,6,'K2'),{rotation:6,name:'R6',phase:'K2',won:0,lost:2,played:2,balance:-2,wonPercent:'0 %'});
+ assert.deepEqual(rotationPhase(stats,5,'K2'),{rotation:5,name:'R5',phase:'K2',won:1,lost:0,played:1,balance:1,wonPercent:'100 %'});
+ assert.equal(rotationPhase(stats,4,'K1').wonPercent,'—');
  const neutral=statistics(play([{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'}]));
  assert.equal(neutral.rotationPhases.reduce((sum,group)=>sum+group.played,0),0);
 });
@@ -113,18 +113,42 @@ test('Partidos legacy recuperan fase y rotación desde los snapshots undo',()=>{
  }
 });
 
-test('El contexto explícito del evento tiene prioridad y no se inventa si falta',()=>{
+test('La alineación previa tiene prioridad y el fallback se usa si no permite deducir R',()=>{
  const state=play([point(0)]),explicit=structuredClone(state);
  explicit.events[0].rotation=6;explicit.events[0].phase='K2';
  const explicitStats=statistics(explicit);
- assert.equal(rotationPhase(explicitStats,6,'K2').won,1);
- assert.equal(rotationPhase(explicitStats,1,'K1').played,0);
+ assert.equal(rotationPhase(explicitStats,1,'K2').won,1);
+ assert.equal(rotationPhase(explicitStats,6,'K2').played,0);
  const unknown=structuredClone(state);delete unknown.events[0].rotation;delete unknown.events[0].phase;unknown.undo=[];
  const unknownStats=statistics(unknown);
  assert.equal(unknownStats.total.won,1);
  assert.equal(unknownStats.phases.reduce((sum,phase)=>sum+phase.won+phase.lost,0),0);
  assert.equal(unknownStats.rotations.reduce((sum,rotation)=>sum+rotation.won+rotation.lost,0),0);
  assert.equal(unknownStats.rotationPhases.reduce((sum,group)=>sum+group.played,0),0);
+});
+test('Estadísticas legacy derivan R6 del snapshot y usan event.rotation como fallback ambiguo',()=>{
+ const state=play([point(0)]),legacy=structuredClone(state);
+ legacy.events[0].rotation=2;
+ legacy.undo[0].lineup=[7,8,15,9,12,4];
+ assert.equal(rotationPhase(statistics(legacy),6,'K1').won,1);
+ const noSetter=structuredClone(legacy);noSetter.undo[0].lineup=[11,8,15,7,9,12];
+ assert.equal(rotationPhase(statistics(noSetter),2,'K1').won,1);
+ const twoSetters=structuredClone(legacy);twoSetters.undo[0].lineup=[6,8,15,4,9,12];
+ assert.equal(rotationPhase(statistics(twoSetters),2,'K1').won,1);
+});
+test('Correcciones reproducen un doble cambio y un side-out siguiendo al nuevo colocador',()=>{
+ const base=initial();base.lineup=[9,12,7,4,8,15];base.rotation=4;
+ const original=[
+  {type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'},
+  {type:'sub',out:4,in:11,label:'Sale colocador'},
+  {type:'sub',out:9,in:6,label:'Entra colocador'},
+  point(0),
+ ].reduce(transition,base);
+ const corrected=correctEvent(original,0,{type:'action',player:8,action:'Ataque',grade:'?',label:'Ataque corregido'});
+ assert.deepEqual(corrected.events.map(event=>event.rotation),[4,4,4,1]);
+ assert.deepEqual(corrected.undo.map(snapshot=>snapshot.rotation),[4,4,4,1]);
+ assert.equal(corrected.rotation,6);
+ assert.equal(corrected.lineup[5],6);
 });
 
 test('Ataque - cuenta como ataque y calidad negativa, no como error de punto',()=>{

@@ -1,3 +1,17 @@
+export function rotationFromLineup(roster, lineup, fallbackRotation) {
+  if (!Array.isArray(roster) || !Array.isArray(lineup) || lineup.length !== 6) {
+    return fallbackRotation;
+  }
+
+  const setters = lineup
+    .map((playerId) => roster.find((player) => player.id === playerId))
+    .filter((player) => player?.role === "Colocador");
+
+  return setters.length === 1
+    ? lineup.findIndex((playerId) => playerId === setters[0].id) + 1
+    : fallbackRotation;
+}
+
 export const roster = [
   { id: 7, name: "Álex", role: "Receptor" },
   { id: 12, name: "Dani", role: "Central" },
@@ -41,18 +55,26 @@ export function createMatch({ team, rival, lineup, serving, activeLiberoId = nul
     throw Error("Indica el rival y quién saca primero.");
   if (activeLiberoId !== null && !team.some(p => p.id === activeLiberoId && p.role === "Líbero"))
     throw Error("El líbero activo no pertenece a la plantilla.");
-  return { ...initial(), id: globalThis.crypto.randomUUID(), demo: false,
+  const next = { ...initial(), id: globalThis.crypto.randomUUID(), demo: false,
     rival: rival.trim(), competition: "Partido", roster: structuredClone(team),
     lineup: [...lineup], serving, activeLiberoId,
     setStarts: [{ set: 1, lineup: [...lineup], activeLiberoId, serving }] };
+  next.rotation = rotationFromLineup(next.roster, next.lineup, next.rotation);
+  return next;
 }
 export function transition(previous, command) {
   const state = structuredClone(previous);
-  const { events, undo, ...snapshot } = structuredClone(previous);
+  state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
+  const { events, undo, ...snapshot } = structuredClone(state);
   if (command.type === "undo") {
     const last = state.undo.pop();
     if (!last) return previous;
-    return { ...last, events: state.events.slice(0, -1), undo: state.undo };
+    return {
+      ...last,
+      rotation: rotationFromLineup(last.roster, last.lineup, last.rotation),
+      events: state.events.slice(0, -1),
+      undo: state.undo,
+    };
   }
   const canFinishMatch =
     command.type === "finish-match" &&
@@ -68,9 +90,9 @@ export function transition(previous, command) {
   if (command.type === "point") {
     state.score[command.team]++;
     if (command.team === 0 && !state.serving) {
-      state.rotation = (state.rotation % 6) + 1;
       state.lineup = [...state.lineup.slice(1), state.lineup[0]];
     }
+    state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
     state.serving = command.team === 0;
   } else if (command.type === "action") {
     const win = command.grade === "#" && command.action !== "Recepción";
@@ -81,15 +103,16 @@ export function transition(previous, command) {
     if (win || lose) {
       state.score[win ? 0 : 1]++;
       if (win && !state.serving) {
-        state.rotation = (state.rotation % 6) + 1;
         state.lineup = [...state.lineup.slice(1), state.lineup[0]];
       }
+      state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
       state.serving = win;
     }
   } else if (command.type === "sub") {
     const index = state.lineup.indexOf(command.out);
     if (index < 0 || state.lineup.includes(command.in)) return previous;
     state.lineup[index] = command.in;
+    state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
   } else if (command.type === "libero-change") {
     if (
       command.activeLiberoId === state.activeLiberoId ||
@@ -118,8 +141,8 @@ export function transition(previous, command) {
         typeof command.serving !== "boolean") return previous;
     state.set++;
     state.score = [0, 0];
-    state.rotation = 1;
     state.lineup = [...nextLineup];
+    state.rotation = rotationFromLineup(state.roster, state.lineup, state.rotation);
     state.serving = command.serving;
     state.activeLiberoId = nextLiberoId;
     state.setStarts = [...(state.setStarts || []), {
@@ -135,7 +158,7 @@ export function transition(previous, command) {
     id: globalThis.crypto.randomUUID(),
     at: new Date().toISOString(),
     set: previous.set,
-    rotation: previous.rotation,
+    rotation: snapshot.rotation,
     phase: previous.serving ? "K2" : "K1",
     before: [...previous.score],
     after: [...state.score],

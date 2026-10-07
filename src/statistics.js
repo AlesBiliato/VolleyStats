@@ -1,3 +1,5 @@
+import { rotationFromLineup } from "./domain.js";
+
 const blank = () => ({
   actions: 0,
   won: 0,
@@ -84,13 +86,15 @@ export function resolveRosterName(match, rosters = []) {
 function resolveEventContext(state, event, index) {
   const previous = state.undo[index];
   const rotation =
-    Number.isInteger(event.rotation) && event.rotation >= 1 && event.rotation <= 6
-      ? event.rotation
-      : Number.isInteger(previous?.rotation) &&
-          previous.rotation >= 1 &&
-          previous.rotation <= 6
-        ? previous.rotation
-        : null;
+    rotationFromLineup(
+      state.roster,
+      previous?.lineup,
+      Number.isInteger(event.rotation) && event.rotation >= 1 && event.rotation <= 6
+        ? event.rotation
+        : Number.isInteger(previous?.rotation) && previous.rotation >= 1 && previous.rotation <= 6
+          ? previous.rotation
+          : null,
+    );
   const phase = ["K1", "K2"].includes(event.phase)
     ? event.phase
     : typeof previous?.serving === "boolean"

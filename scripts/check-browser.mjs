@@ -513,9 +513,9 @@ try{
  });
 
  await check('Puntos, recuperacion del saque, doble toque y deshacer',async()=>{
-  await reset();const before=await state();await tap('ours');let s=await state();equal(s.score,[1,0]);equal(s.rotation,2);equal(s.lineup,[9,12,7,8,15,4]);
+  await reset();const before=await state();await tap('ours');let s=await state();equal(s.score,[1,0]);equal(s.rotation,6);equal(s.lineup,[9,12,7,8,15,4]);
   await page.waitForTimeout(420);await page.locator('[data-cmd="ours"]').dblclick();equal((await state()).score,[2,0]);
-  await commit('theirs');s=await state();equal(s.score,[2,1]);equal(s.serving,false);equal(s.rotation,2);
+  await commit('theirs');s=await state();equal(s.score,[2,1]);equal(s.serving,false);equal(s.rotation,6);
   await undo();equal((await state()).score,[2,0]);await undo();await undo();equal(await state(),before);
  });
  await check('Acciones recientes se adaptan al ancho y siguen el historial real',async()=>{
@@ -566,7 +566,7 @@ try{
  });
  await check('Errores rivales y errores nuestros, historial, correccion y persistencia',async()=>{
   await reset();await tap('serve-error');await commit('attack-error');equal((await state()).score,[2,0]);
-  for(const reason of ['rotation','net']){await tap('unforced-error');await commit('record-unforced:'+reason);const s=await state();equal(s.events.at(-1).reason,reason);equal(s.events.at(-1).category,'unforced-error');equal(s.serving,false);equal(s.rotation,2);}
+  for(const reason of ['rotation','net']){await tap('unforced-error');await commit('record-unforced:'+reason);const s=await state();equal(s.events.at(-1).reason,reason);equal(s.events.at(-1).category,'unforced-error');equal(s.serving,false);equal(s.rotation,6);}
   const beforeOther=await state();await tap('unforced-error');assert.match(await page.locator('#modal').innerText(),/Otros/);assert.equal(await page.locator('[data-cmd="record-unforced:other"]').count(),1);await commit('record-unforced:other');
   let otherState=await state();equal(otherState.score,[2,3]);equal(otherState.serving,false);equal(otherState.rotation,beforeOther.rotation);equal(otherState.events.at(-1).category,'unforced-error');equal(otherState.events.at(-1).reason,'other');assert.match(otherState.events.at(-1).label,/Otros/);
   await undo();equal(await state(),beforeOther);await tap('unforced-error');await commit('record-unforced:other');
@@ -1058,16 +1058,70 @@ try{
   assert.equal(await section.locator('tbody tr').count(),12);
   const values=await section.locator('tbody tr').evaluateAll(rows=>Object.fromEntries(rows.map(row=>[`${row.dataset.rotation}-${row.dataset.phase}`,[...row.cells].map(cell=>cell.textContent.trim())])));
   assert.deepEqual(values['R1-K1'],['R1','K1','1','1','0','1','100 %']);
-  assert.deepEqual(values['R2-K2'],['R2','K2','1','0','1','-1','0 %']);
-  assert.deepEqual(values['R3-K2'],['R3','K2','1','1','0','1','100 %']);
-  assert.deepEqual(values['R6-K1'],['R6','K1','0','0','0','0','—']);
-  assert.deepEqual(values['R6-K2'],['R6','K2','0','0','0','0','—']);
+  assert.deepEqual(values['R6-K2'],['R6','K2','1','0','1','-1','0 %']);
+  assert.deepEqual(values['R5-K2'],['R5','K2','1','1','0','1','100 %']);
+  assert.deepEqual(values['R6-K1'],['R6','K1','1','1','0','1','100 %']);
+  assert.deepEqual(values['R2-K2'],['R2','K2','0','0','0','0','—']);
   for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){
    await page.setViewportSize({width,height});
    const layout=await section.evaluate(element=>{const dialog=element.closest('dialog'),wrapper=element.querySelector('.rotation-phase-table'),table=wrapper.querySelector('table'),box=dialog.getBoundingClientRect();return {dialogInside:box.left>=0&&box.right<=innerWidth+1&&box.top>=0&&box.bottom<=innerHeight+1,pageOverflow:document.documentElement.scrollWidth>innerWidth+1,dialogOverflow:dialog.scrollWidth>dialog.clientWidth+1,tableOverflow:table.scrollWidth>wrapper.clientWidth+1,font:parseFloat(getComputedStyle(table).fontSize)};});
    assert.equal(layout.dialogInside,true,`${width}x${height} modal visible`);assert.equal(layout.pageOverflow,false,`${width}x${height} página sin overflow`);assert.equal(layout.dialogOverflow,false,`${width}x${height} diálogo sin overflow`);assert.equal(layout.tableOverflow,false,`${width}x${height} tabla sin overflow`);assert(layout.font>=12,`${width}x${height} texto legible`);
   }
   await tap('close');
+ });
+ await check('Rotación visible sigue la zona del colocador tras side-out',async()=>{
+  const match=initial();match.demo=false;match.id='browser-setter-zone-two';match.lineup=[9,4,12,7,8,15];match.rotation=2;match.serving=false;
+  await reset(match);assert.equal(await page.locator('.phase b').innerText(),'R2');
+  await tap('ours');assert.equal(await page.locator('.phase b').innerText(),'R1');equal((await state()).lineup,[4,12,7,8,15,9]);
+  await tap('ours');assert.equal(await page.locator('.phase b').innerText(),'R1');
+  await tap('theirs');assert.equal(await page.locator('.phase b').innerText(),'R1');
+ });
+ await check('Doble cambio actualiza R en ambos órdenes y undo conserva snapshots',async()=>{
+  const base=initial();base.demo=false;base.id='browser-double-change';base.lineup=[9,12,7,4,8,15];base.rotation=4;base.serving=false;
+  await reset(base);await tap('sub');await tap('sub-out:4');await tap('sub-in:11');await tap('review-change');await commit('confirm-sub:4,11');assert.equal(await page.locator('.phase b').innerText(),'R4');
+  await tap('sub');await tap('sub-out:9');await tap('sub-in:6');await tap('review-change');await commit('confirm-sub:9,6');assert.equal(await page.locator('.phase b').innerText(),'R1');
+  equal((await state()).lineup,[6,12,7,11,8,15]);await commit('ours');assert.equal(await page.locator('.phase b').innerText(),'R6');
+  await undo();assert.equal(await page.locator('.phase b').innerText(),'R1');await undo();assert.equal(await page.locator('.phase b').innerText(),'R4');
+  const inverse=structuredClone(base);await reset(inverse);await tap('sub');await tap('sub-out:9');await tap('sub-in:6');await tap('review-change');await commit('confirm-sub:9,6');assert.equal(await page.locator('.phase b').innerText(),'R4');await tap('sub');await tap('sub-out:4');await tap('sub-in:11');await tap('review-change');await commit('confirm-sub:4,11');assert.equal(await page.locator('.phase b').innerText(),'R1');
+ });
+ await check('Partido legacy reconcilia R en UI sin reescribir al cargar',async()=>{
+  const legacy=initial();legacy.demo=false;legacy.id='legacy-playing-rotation';legacy.rosterId='legacy-roster';legacy.lineup=[7,8,15,9,12,4];legacy.rotation=2;legacy.serving=false;
+  await page.goto(url);await page.evaluate(match=>{localStorage.clear();localStorage.setItem('volleystats.match.v1',JSON.stringify(match));localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'legacy-roster',name:'Legacy',players:match.roster}]));},legacy);await page.reload();await page.locator('.court').waitFor();
+  assert.equal(await page.locator('.phase b').innerText(),'R6');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')).rotation),2);
+  await tap('ours');assert.equal(await page.locator('.phase b').innerText(),'R5');assert.equal((await state()).events.at(-1).rotation,6);
+ });
+ await check('Historial legacy muestra la R del snapshot sin reescribir el evento',async()=>{
+  let legacy=initial();legacy.demo=false;legacy.id='legacy-history-rotation';legacy.rosterId='legacy-roster';legacy.lineup=[7,8,15,9,12,4];legacy.rotation=2;legacy=transition(legacy,{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'});legacy.events[0].rotation=2;
+  await page.goto(url);await page.evaluate(match=>{localStorage.clear();localStorage.setItem('volleystats.match.v1',JSON.stringify(match));localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'legacy-roster',name:'Legacy',players:match.roster}]));},legacy);await page.reload();await page.locator('.court').waitFor();
+  await tap('history');assert.match(await page.locator('.history-entry small').innerText(),/R6/);assert.equal((await state()).events[0].rotation,2);await tap('close');
+ });
+ await check('Correccion y replay conservan R del nuevo colocador',async()=>{
+  let match=initial();match.demo=false;match.id='replay-setter-rotation';match.lineup=[9,12,7,4,8,15];match.rotation=4;match.serving=false;
+  match=transition(match,{type:'action',player:7,action:'Ataque',grade:'?',label:'Ataque ?'});
+  match=transition(match,{type:'sub',out:4,in:11,label:'Sustitución'});
+  match=transition(match,{type:'sub',out:9,in:6,label:'Sustitución'});
+  match=transition(match,{type:'point',team:0,label:'Punto nuestro'});
+  await reset(match);await tap('history');await tap('edit-event:0');await page.selectOption('[name="player"]','8');await page.locator('#edit-form button[type="submit"]').click();await tap('confirm-correction');
+  const replayed=await state();assert.equal(replayed.rotation,6);assert.deepEqual(replayed.events.map(event=>event.rotation),[4,4,4,1]);assert.equal(replayed.lineup[5],6);
+ });
+ await check('Preparar Set 1 con colocador en zona 2 muestra R2 y side-out R1',async()=>{
+  const players=initial().roster;
+  await page.goto(url);await page.evaluate(roster=>{localStorage.clear();localStorage.setItem('volleystats.rosters.v1',JSON.stringify([{id:'rotation-setup-roster',name:'Equipo rotación',players:roster}]));},players);await page.reload();
+  await tap('select-roster:rotation-setup-roster');await tap('continue-welcome');
+  await page.locator('[name="rival"]').fill('Rival rotación');
+  await page.locator('[name="date"]').evaluate(input=>{input.value='2026-10-07'});
+  await page.locator('[name="time"]').evaluate(input=>{input.value='18:00'});
+  await page.locator('[name="venue"]').evaluate(input=>{input.value='home'});
+  await page.locator('#match-basics-form button[type="submit"]').click();await tap('prepare-set-1');
+  for(const [zone,id] of [[1,9],[2,4],[3,12],[4,7],[5,8],[6,15]]){await tap(`set-zone:${zone}`);await tap(`choose-lineup-player:${zone},${id}`);}
+  await tap('continue-lineup');await tap('set-libero:none');await tap('continue-libero');await tap('set-serving:theirs');await tap('start-match');
+  assert.equal(await page.locator('.phase b').innerText(),'R2');assert.equal(await page.locator('.player[data-zone="2"] .jersey').innerText(),'4');
+  await tap('ours');assert.equal(await page.locator('.phase b').innerText(),'R1');assert.equal(await page.locator('.player[data-zone="1"] .jersey').innerText(),'4');
+ });
+ await check('Estadísticas de partido legacy usan la R real del snapshot',async()=>{
+  let legacy=initial();legacy.demo=false;legacy.id='legacy-archive-rotation';legacy.rival='Rival legacy';legacy.date='2026-09-01';legacy.lineup=[7,8,15,9,12,4];legacy.rotation=2;legacy=transition(legacy,{type:'point',team:0,label:'Punto legacy'});legacy=transition(legacy,{type:'finish-match',label:'Partido finalizado'});legacy.events[0].rotation=2;legacy.undo[0].lineup=[7,8,15,9,12,4];
+  await page.goto(url);await page.evaluate(match=>{localStorage.clear();localStorage.setItem('volleystats.archives.v1',JSON.stringify([match]));},legacy);await page.reload();await tap('nav:matches');await tap('stats-archive:legacy-archive-rotation');await tap('stat-tab:Rotaciones');
+  const row=page.locator('[data-rotation="R6"][data-phase="K1"]');assert.equal(await row.locator('td').nth(3).innerText(),'1');assert.equal(await page.locator('[data-rotation="R2"][data-phase="K1"] td').nth(2).innerText(),'0');await tap('close');
  });
  await check('Correccion de ultimo registro, deshacer vacio y fallo al guardar',async()=>{
   await reset();await tap('ours');const before=await state();await tap('history');await tap('edit-event:0');await tap('delete-event:0');await tap('confirm-correction');equal((await state()).events.length,0);assert.equal(await page.locator('[data-cmd="undo"]').isDisabled(),false);await page.reload();await undo();equal(await state(),before);
@@ -1335,6 +1389,7 @@ try{
   await tap('start-match');
   const created=await state();
   equal(created.lineup,[4,9,12,7,8,15]);
+  assert.equal(created.rotation,1);
   assert.equal(created.serving,true);
   assert.equal(created.activeLiberoId,1);
   assert.equal(created.rosterId,'setup-roster');
@@ -1381,7 +1436,7 @@ try{
   await tap('start-match');
   const second=await state();
   equal(second.lineup,[9,12,7,8,6,4]);
-  assert.equal(second.set,2);equal(second.score,[0,0]);assert.equal(second.rotation,1);
+  assert.equal(second.set,2);equal(second.score,[0,0]);assert.equal(second.rotation,6);
   assert.equal(second.serving,false);assert.equal(second.activeLiberoId,1);
   equal(second.setStarts[0].lineup,[4,9,12,7,8,15]);
   equal(second.setStarts[1],{set:2,lineup:[9,12,7,8,6,4],activeLiberoId:1,serving:false});
