@@ -46,13 +46,13 @@ async function loadPdfDependencies() {
     dependencyPromise = (async () => {
       await loadScript(
         new URL(
-          "../node_modules/jspdf/dist/jspdf.umd.min.js",
+          "../vendor/jspdf.umd.min.js",
           import.meta.url,
         ).href,
       );
       await loadScript(
         new URL(
-          "../node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js",
+          "../vendor/jspdf.plugin.autotable.min.js",
           import.meta.url,
         ).href,
       );
