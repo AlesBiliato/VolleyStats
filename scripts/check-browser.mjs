@@ -60,6 +60,14 @@ async function commit(cmd){await page.waitForTimeout(420);await tap(cmd);}
 async function undo(){await tap('undo');await commit('confirm-undo');}
 async function check(name,fn){try{await fn();results.push({name,ok:true});console.log('PASS '+name)}catch(e){results.push({name,ok:false});console.error('FAIL '+name+': '+e.message)}}
 function equal(a,b){assert.deepEqual(a,b)}
+function finishedMatch({id,rival,date,time='18:00',venue='Local',rosterName='Plantilla histórica',sets=[[25,20]],playerName=null,action=null}){
+ let match=initial();
+ match.demo=false;
+ Object.assign(match,{id,rival,date,time,venue,rosterName,set:sets.length||1,finishedSets:sets.map((score,index)=>({set:index+1,score}))});
+ if(playerName)match.roster.find(player=>player.id===7).name=playerName;
+ if(action)match=transition(match,{type:'action',player:7,...action});
+ return transition(match,{type:'finish-match',label:'Partido finalizado'});
+}
 try{
  await check('Favicon oficial único, accesible y decodificable',async()=>{
   await page.goto(url);
@@ -823,7 +831,101 @@ try{
   archived.id='archived-finished-report';
   await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
   await tap('nav:history');
+  assert.doesNotMatch(await page.locator('main').innerText(),/Partidos anteriores/);
+  await tap('nav:matches');
   assert.equal(await page.locator('[data-cmd="generate-pdf-archive:archived-finished-report"]').count(),1);
+ });
+ await check('Partidos vacío muestra estado claro y permite volver',async()=>{
+  await reset();
+  await tap('nav:matches');
+  assert.match(await page.locator('main').innerText(),/Aún no hay partidos finalizados/);
+  assert.equal(await page.locator('.match-archive-card').count(),0);
+  await tap('nav:match');
+  await page.locator('.court').waitFor();
+ });
+ await check('Partidos lista finalizados ordenados, filtra incompletos y deduplica',async()=>{
+  const old=finishedMatch({id:'archive-old',rival:'Rival antiguo',date:'2026-08-20',time:'18:00',sets:[[25,20],[25,22]]});
+  const newest=finishedMatch({id:'archive-new',rival:'Rival reciente',date:'2026-10-02',time:'20:30',venue:'Visitante',sets:[[23,25],[20,25],[23,25]]});
+  const middle=finishedMatch({id:'archive-middle',rival:'Rival medio',date:'2026-09-15',time:'19:00',sets:[[25,21],[20,25],[25,19]]});
+  const duplicate={...old,rival:'Duplicado que no debe verse'};
+  const incomplete={...initial(),id:'archive-playing',demo:false,rival:'Partido incompleto'};
+  await page.goto(url);await page.evaluate(matches=>{localStorage.clear();localStorage.setItem('volleystats.archives.v1',JSON.stringify(matches));},[old,incomplete,duplicate,middle,newest]);await page.reload();
+  await tap('nav:matches');
+  const cards=page.locator('.match-archive-card');
+  assert.equal(await cards.count(),3);
+  equal(await cards.evaluateAll(items=>items.map(item=>item.dataset.matchId)),['archive-new','archive-middle','archive-old']);
+  assert.match(await cards.nth(0).innerText(),/Rival reciente vs Plantilla histórica/);
+  assert.match(await cards.nth(0).innerText(),/02\/10\/2026 · 20:30 · Visitante/);
+  assert.match(await cards.nth(0).innerText(),/3\s*–\s*0/);
+  assert.match(await cards.nth(0).innerText(),/25-23 · 25-20 · 25-23/);
+  assert.doesNotMatch(await page.locator('main').innerText(),/Partido incompleto/);
+  assert.equal(await page.locator('.match-archive-card[data-match-id="archive-old"]').count(),1);
+ });
+ await check('Partidos incluye inmediatamente el partido actual finalizado',async()=>{
+  const current=finishedMatch({id:'current-finished-only',rival:'Final recién terminada',date:'2026-10-06',sets:[[25,17],[25,19],[25,21]]});
+  await reset(current);
+  const stale={...current,rival:'Copia archivada obsoleta'};
+  await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),stale);
+  await tap('nav:matches');
+  assert.equal(await page.locator('.match-archive-card[data-match-id="current-finished-only"]').count(),1);
+  assert.match(await page.locator('.match-archive-card').innerText(),/Final recién terminada/);
+  assert.doesNotMatch(await page.locator('.match-archive-card').innerText(),/Copia archivada obsoleta/);
+  assert.match(await page.locator('.match-archive-card').innerText(),/3\s*–\s*0/);
+ });
+ await check('Partidos conserva intacto el partido actual en juego',async()=>{
+  let current=transition(initial(),{type:'point',team:0,label:'Punto nuestro'});current.demo=false;current.id='current-playing';current.score=[17,14];current.rotation=4;current.serving=true;
+  const archived=finishedMatch({id:'only-finished',rival:'Rival archivado',date:'2026-09-10'});
+  await reset(current);
+  await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
+  const before=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
+  await tap('nav:matches');
+  assert.equal(await page.locator('.match-archive-card[data-match-id="only-finished"]').count(),1);
+  assert.equal(await page.locator('.match-archive-card[data-match-id="current-playing"]').count(),0);
+  await tap('stats-archive:only-finished');await tap('close');await tap('nav:match');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),before);
+  equal(await state(),JSON.parse(before));
+ });
+ await check('Estadísticas archivadas mantienen su fuente al cambiar pestaña y set',async()=>{
+  let current=initial();current.demo=false;current.id='different-current';current.roster.find(player=>player.id===7).name='ACTUAL Álex';
+  const archived=finishedMatch({id:'stats-archive',rival:'Rival estadísticas',date:'2026-09-12',playerName:'ARCHIVADO Álex',action:{action:'Ataque',grade:'#',label:'Ataque #'}});
+  await reset(current);
+  await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
+  const before=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
+  await tap('nav:matches');await tap('stats-archive:stats-archive');
+  assert.match(await page.locator('#stat-body').innerText(),/ARCHIVADO Álex/);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/ACTUAL Álex/);
+  for(const tab of ['K1/K2','Rotaciones','Errores']){await tap('stat-tab:'+tab);assert.equal(await page.locator('.stats-tabs .primary').innerText(),tab);}
+  await tap('stat-tab:General');await tap('period-toggle');await tap('period-set:1');
+  assert.match(await page.locator('#stat-body').innerText(),/ARCHIVADO Álex/);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/ACTUAL Álex/);
+  await tap('period-toggle');await tap('period-set:all');await tap('stat-tab:General');
+  assert.match(await page.locator('#stat-body').innerText(),/ARCHIVADO Álex/);
+  await tap('close');assert.equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),before);
+ });
+ await check('PDF de Partidos descarga un archivo real sin cambiar el actual',async()=>{
+  let current=initial();current.demo=false;current.id='current-before-archive-pdf';
+  const archived=finishedMatch({id:'archive-pdf',rival:'Rival PDF',date:'2026-09-18',sets:[[25,20],[25,22],[25,18]]});
+  await reset(current);await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
+  const before=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
+  await tap('nav:matches');const downloadPromise=page.waitForEvent('download');await tap('generate-pdf-archive:archive-pdf');const download=await downloadPromise;const bytes=await readFile(await download.path());
+  assert.equal(bytes.subarray(0,5).toString(),'%PDF-');assert(bytes.length>1000);assert.equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),before);
+ });
+ await check('Partidos es accesible desde bienvenida sin plantilla ni partido actual',async()=>{
+  const archived=finishedMatch({id:'welcome-archive',rival:'Rival desde bienvenida',date:'2026-09-22'});
+  await page.goto(url);await page.evaluate(match=>{localStorage.clear();localStorage.setItem('volleystats.archives.v1',JSON.stringify([match]));},archived);await page.reload();
+  assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);
+  assert.equal(await page.locator('[data-cmd="nav:matches"]').count(),1);
+  await tap('nav:matches');assert.equal(await page.locator('.match-archive-card[data-match-id="welcome-archive"]').count(),1);
+  await tap('stats-archive:welcome-archive');assert.match(await page.locator('#stat-body').innerText(),/Álex/);await tap('close');await tap('nav:welcome');
+  assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);assert.equal(await state(),null);
+ });
+ await check('Partidos con diez tarjetas es responsive y mantiene controles accesibles',async()=>{
+  const matches=Array.from({length:10},(_,index)=>finishedMatch({id:'responsive-'+index,rival:'Asociación Deportiva Rival con un nombre especialmente largo '+index,date:`2026-09-${String(index+1).padStart(2,'0')}`,time:`${String(10+index).padStart(2,'0')}:15`,venue:index%2?'Visitante':'Local',rosterName:'Club Deportivo Voleibol Ciudad Universitaria',sets:[[25,20],[23,25],[25,22]]}));
+  await page.goto(url);await page.evaluate(items=>{localStorage.clear();localStorage.setItem('volleystats.archives.v1',JSON.stringify(items));},matches);await page.reload();await tap('nav:matches');
+  for(const [width,height] of [[768,1024],[1024,768],[1024,600],[1280,800],[1366,768],[1920,1080]]){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(({width})=>{const grid=document.querySelector('.matches-grid'),cards=[...document.querySelectorAll('.match-archive-card')],buttons=[...document.querySelectorAll('.match-archive-actions button')];return {horizontal:document.documentElement.scrollWidth>width+1||grid.scrollWidth>grid.clientWidth+1,scrollable:grid.scrollHeight>grid.clientHeight,cards:cards.map(card=>{const box=card.getBoundingClientRect();return {width:box.width,inside:box.left>=-1&&box.right<=width+1};}),buttons:buttons.map(button=>button.getBoundingClientRect().height)};},{width});
+   assert.equal(layout.horizontal,false,`${width} sin overflow horizontal`);assert.equal(layout.cards.length,10);for(const card of layout.cards){assert(card.width>0);assert.equal(card.inside,true);}for(const height of layout.buttons)assert(height>=47.5);if(height<=800)assert.equal(layout.scrollable,true);
+  }
+  await page.locator('.matches-grid').evaluate(grid=>grid.scrollTo(0,grid.scrollHeight));assert.equal(await page.locator('.match-archive-card').last().isVisible(),true);
  });
  await check('Finalizar partido entre sets conserva el set cerrado y permite deshacer',async()=>{
   await reset();await commit('ours');await tap('finish');await commit('confirm-finish');const between=await state();equal(between.status,'between');equal(between.finishedSets,[{set:1,score:[1,0]}]);assert.equal(await page.locator('[data-cmd="next"]').count(),1);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),1);

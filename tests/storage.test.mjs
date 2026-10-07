@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initial,transition} from '../src/domain.js';
-import {loadMatch,saveMatch} from '../src/storage.js';
+import {loadArchives,loadMatch,replaceMatch,saveMatch} from '../src/storage.js';
 
 function localStore(value=null){
- globalThis.localStorage={getItem:()=>value,setItem:(_key,next)=>{value=next;}};
- return ()=>value;
+ const values=new Map();
+ if(value!==null)values.set('volleystats.match.v1',value);
+ globalThis.localStorage={
+  getItem:key=>values.get(key)??null,
+  setItem:(key,next)=>values.set(key,next),
+ };
+ return (key='volleystats.match.v1')=>values.get(key)??null;
 }
 
 test('Guardado y lectura conservan partido, historial y deshacer',()=>{
@@ -57,4 +62,47 @@ test('Rechaza una instantánea dañada de deshacer antes de abrir el partido',()
 test('Propaga el fallo de guardado para que la interfaz no aplique la operación',()=>{
  globalThis.localStorage={setItem(){throw new Error('Sin espacio');}};
  assert.throws(()=>saveMatch(initial()),/Sin espacio/);
+});
+
+test('replaceMatch conserva el partido anterior en el archivo',()=>{
+ const stored=localStore();
+ const previous={...initial(),id:'previous-match',demo:false};
+ const next={...initial(),id:'next-match',demo:false};
+ saveMatch(previous);
+ replaceMatch(next);
+ assert.deepEqual(loadMatch(),next);
+ assert.deepEqual(loadArchives(),[previous]);
+ assert.equal(JSON.parse(stored('volleystats.archives.v1')).length,1);
+});
+
+test('replaceMatch no duplica un partido archivado con el mismo ID',()=>{
+ const previous={...initial(),id:'same-archive-id',demo:false,rival:'Versión actual'};
+ const duplicate={...previous,rival:'Versión antigua'};
+ const next={...initial(),id:'next-after-duplicate',demo:false};
+ localStore();
+ saveMatch(previous);
+ localStorage.setItem('volleystats.archives.v1',JSON.stringify([duplicate]));
+ replaceMatch(next);
+ assert.deepEqual(loadArchives(),[previous]);
+});
+
+test('loadArchives devuelve todos los partidos guardados válidos',()=>{
+ const first={...initial(),id:'archive-one',demo:false};
+ const second={...initial(),id:'archive-two',demo:false};
+ localStore();
+ localStorage.setItem('volleystats.archives.v1',JSON.stringify([first,second]));
+ assert.deepEqual(loadArchives(),[first,second]);
+});
+
+test('datos corruptos del archivo no se sobrescriben silenciosamente',()=>{
+ const corrupt='[{"id":"incompleto"}]';
+ const previous={...initial(),id:'current-before-corrupt',demo:false};
+ const next={...initial(),id:'next-after-corrupt',demo:false};
+ const stored=localStore();
+ saveMatch(previous);
+ localStorage.setItem('volleystats.archives.v1',corrupt);
+ assert.throws(loadArchives,/partidos guardados/);
+ assert.throws(()=>replaceMatch(next),/partidos guardados/);
+ assert.equal(stored('volleystats.archives.v1'),corrupt);
+ assert.deepEqual(loadMatch(),previous);
 });

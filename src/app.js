@@ -102,6 +102,7 @@ try {
 }
 let statsTab = "General",
   statsSet = "all",
+  statsSourceMatch = null,
   periodOpen = false,
   pendingCorrection = null;
 let page = hasMatch ? (state.demo ? "setup" : "match") : "welcome",
@@ -124,6 +125,7 @@ modal.addEventListener("close", () => {
   selectedSubOut = null;
   selectedSubIn = null;
   selectedLiberoId = null;
+  statsSourceMatch = null;
 });
 const esc = (s) =>
   String(s).replace(
@@ -1252,6 +1254,7 @@ function renderWelcome() {
 
         <div class="welcome-footer">
           <p class="muted">Las plantillas se guardan solamente en este dispositivo.</p>
+          ${button("Ver partidos finalizados", "nav:matches", "welcome-matches")}
           ${button(
             "Continuar",
             "continue-welcome",
@@ -1325,6 +1328,101 @@ function observeRecentActions() {
   recentActionsObserver.observe(track);
 }
 
+function finalizedMatches() {
+  let archives = [];
+  let error = null;
+
+  try {
+    archives = loadArchives();
+  } catch (loadError) {
+    error = loadError;
+  }
+
+  const matchesById = new Map();
+  archives
+    .filter((match) => match.status === "finished")
+    .forEach((match) => matchesById.set(match.id, match));
+
+  if (hasMatch && state.status === "finished") {
+    matchesById.set(state.id, state);
+  }
+
+  const matches = [...matchesById.values()];
+  matches.sort((left, right) => {
+    const leftDate = `${left.date || ""}T${left.time || ""}`;
+    const rightDate = `${right.date || ""}T${right.time || ""}`;
+    return rightDate.localeCompare(leftDate);
+  });
+
+  return { matches, error };
+}
+
+function formatArchiveDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return value || "Sin fecha";
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function archiveMatchCard(match) {
+  const ours = rosterNameForMatch(match);
+  const rival = match.rival || "Rival";
+  const visitor = match.venue === "Visitante";
+  const homeName = visitor ? rival : ours;
+  const awayName = visitor ? ours : rival;
+  const ourSets = match.finishedSets.filter((set) => set.score[0] > set.score[1]).length;
+  const rivalSets = match.finishedSets.filter((set) => set.score[1] > set.score[0]).length;
+  const homeSets = visitor ? rivalSets : ourSets;
+  const awaySets = visitor ? ourSets : rivalSets;
+  const setResults = match.finishedSets.length
+    ? match.finishedSets
+        .map((set) => visitor ? `${set.score[1]}-${set.score[0]}` : `${set.score[0]}-${set.score[1]}`)
+        .join(" · ")
+    : "Sin sets finalizados";
+
+  return `<article class="match-archive-card" data-match-id="${esc(match.id)}">
+    <div class="match-archive-copy">
+      <span class="eyebrow">${esc(match.venue || "Sede no indicada")}</span>
+      <h2>${esc(homeName)} <span>vs</span> ${esc(awayName)}</h2>
+      <p>${esc(formatArchiveDate(match.date))}${match.time ? ` · ${esc(match.time)}` : ""} · ${esc(match.venue || "Sede no indicada")}</p>
+    </div>
+    <div class="match-archive-result" aria-label="Resultado final ${homeSets} a ${awaySets}">
+      <strong>${homeSets} <span>–</span> ${awaySets}</strong>
+      <small>${esc(setResults)}</small>
+    </div>
+    <div class="match-archive-actions">
+      ${button("Ver estadísticas", `stats-archive:${match.id}`, "primary")}
+      ${button("Generar PDF", `generate-pdf-archive:${match.id}`, "generate-pdf")}
+    </div>
+  </article>`;
+}
+
+function renderMatches() {
+  const { matches, error } = finalizedMatches();
+  const returnCommand = hasMatch ? "nav:match" : "nav:welcome";
+  app.innerHTML = `
+    <header>
+      ${brandLink(returnCommand)}
+      <nav>
+        ${hasMatch ? button("Partido", "nav:match") : ""}
+        ${hasMatch ? button("Historial", "nav:history") : ""}
+        ${button("Partidos", "nav:matches", "active")}
+        ${hasMatch ? button("Plantilla", "nav:roster") : ""}
+      </nav>
+      <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Guardado en este dispositivo"}</div>
+    </header>
+    <main class="matches-page">
+      <div class="page-heading">
+        <div><span class="eyebrow">ARCHIVO LOCAL</span><h1>Partidos</h1></div>
+        ${button(hasMatch ? "Volver al partido" : "Volver a bienvenida", returnCommand)}
+      </div>
+      ${error ? `<p class="matches-storage-error" role="alert">${esc(error.message)}</p>` : ""}
+      ${matches.length
+        ? `<section class="matches-grid" aria-label="Partidos finalizados">${matches.map(archiveMatchCard).join("")}</section>`
+        : `<section class="wide-card matches-empty"><h2>Aún no hay partidos finalizados.</h2><p>Los encuentros aparecerán aquí cuando se finalicen.</p></section>`}
+      <footer><span>VOLLEYSTATS <b> / </b> Tu equipo, punto a punto.</span><span>Archivo local · ${matches.length} ${matches.length === 1 ? "partido" : "partidos"}</span></footer>
+    </main>`;
+}
+
 function render() {
   disconnectRecentActionsObserver();
   if (page !== "match" || state.status !== "playing") {
@@ -1332,6 +1430,11 @@ function render() {
   }
   if (page === "welcome" && !creatingRoster) {
     renderWelcome();
+    return;
+  }
+
+  if (page === "matches") {
+    renderMatches();
     return;
   }
 
@@ -1346,6 +1449,7 @@ function render() {
       <nav>
         ${button("Partido", "nav:match", page === "match" ? "active" : "")}
         ${button("Historial", "nav:history", page === "history" ? "active" : "")}
+        ${button("Partidos", "nav:matches", page === "matches" ? "active" : "")}
         ${button("Plantilla", "nav:roster", page === "roster" ? "active" : "")}
       </nav>
 
@@ -1445,7 +1549,6 @@ function render() {
 
                 ${historyRows(true)}
               </section>
-              ${archiveReportSection()}
             `
       }
 
@@ -1461,23 +1564,6 @@ function render() {
     </main>
   `;
   if (page === "match") observeRecentActions();
-}
-function archiveReportSection() {
-  let archives;
-  try {
-    archives = loadArchives().filter((match) => match.status === "finished");
-  } catch (error) {
-    return `<section class="wide-card archive-reports"><h2>Partidos anteriores</h2><p role="alert">${esc(error.message)}</p></section>`;
-  }
-  if (!archives.length) return "";
-
-  return `<section class="wide-card archive-reports"><h2>Partidos anteriores</h2><p>Informes disponibles para los partidos finalizados guardados en este dispositivo.</p><div class="archive-report-list">${[...archives]
-    .reverse()
-    .map(
-      (match) =>
-        `<article><div><strong>${esc(resolveRosterName(match, savedRosters))} vs ${esc(match.rival || "Rival")}</strong><small>${esc(match.date || "Sin fecha")} · ${esc(match.venue || "Sede no indicada")}</small></div>${button("Generar PDF", `generate-pdf-archive:${match.id}`, "generate-pdf")}</article>`,
-    )
-    .join("")}</div></section>`;
 }
 function historyRows(all = false) {
   const events = all ? state.events : state.events.slice(-5);
@@ -2130,7 +2216,7 @@ document.addEventListener("click", (e) => {
   }
   if (cmd === "generate-pdf-archive") {
     try {
-      const archived = loadArchives().find((match) => match.id === value);
+      const archived = finalizedMatches().matches.find((match) => match.id === value);
       if (archived?.status === "finished") void downloadMatchReport(archived);
     } catch (error) {
       console.error("No se pudo generar el PDF", error);
@@ -2805,6 +2891,16 @@ document.addEventListener("click", (e) => {
   if (cmd === "stats") {
     statsTab = "General";
     statsSet = "all";
+    statsSourceMatch = null;
+    statsDialog();
+    return;
+  }
+  if (cmd === "stats-archive") {
+    const archived = finalizedMatches().matches.find((match) => match.id === value);
+    if (!archived) return;
+    statsTab = "General";
+    statsSet = "all";
+    statsSourceMatch = archived;
     statsDialog();
     return;
   }
@@ -3004,9 +3100,10 @@ function handleMatchKeyboard(event) {
 
 document.addEventListener("keydown", handleMatchKeyboard);
 function statsDialog() {
+  const source = statsSourceMatch || state;
   const periods = [
     ["all", "Partido completo"],
-    ...Array.from({ length: state.set }, (_, i) => [
+    ...Array.from({ length: source.set }, (_, i) => [
       String(i + 1),
       `Set ${i + 1}`,
     ]),
@@ -3015,11 +3112,11 @@ function statsDialog() {
     periods.find(([value]) => value === statsSet)?.[1] || "Partido completo";
   show(
     "Estadísticas",
-    `<div class="stats-filter"><span class="period-label">Periodo</span><div class="period-picker"><button class="period-trigger" type="button" data-cmd="period-toggle" aria-haspopup="listbox" aria-expanded="${periodOpen}">${selectedPeriod}<span class="period-chevron" aria-hidden="true">⌄</span></button>${periodOpen ? `<div class="period-options" role="listbox" aria-label="Periodo">${periods.map(([value, label]) => `<button type="button" role="option" aria-selected="${value === statsSet}" class="period-option ${value === statsSet ? "selected" : ""}" data-cmd="period-set:${value}">${label}${value === statsSet ? '<span aria-hidden="true">✓</span>' : ""}</button>`).join("")}</div>` : ""}</div></div><div class="stats-tabs">${["General", "K1/K2", "Rotaciones", "Errores"].map((t) => button(t, "stat-tab:" + t, statsTab === t ? "primary" : "")).join("")}</div><div id="stat-body">${statsBody(statsTab)}</div>`,
+    `<div class="stats-filter"><span class="period-label">Periodo</span><div class="period-picker"><button class="period-trigger" type="button" data-cmd="period-toggle" aria-haspopup="listbox" aria-expanded="${periodOpen}">${selectedPeriod}<span class="period-chevron" aria-hidden="true">⌄</span></button>${periodOpen ? `<div class="period-options" role="listbox" aria-label="Periodo">${periods.map(([value, label]) => `<button type="button" role="option" aria-selected="${value === statsSet}" class="period-option ${value === statsSet ? "selected" : ""}" data-cmd="period-set:${value}">${label}${value === statsSet ? '<span aria-hidden="true">✓</span>' : ""}</button>`).join("")}</div>` : ""}</div></div><div class="stats-tabs">${["General", "K1/K2", "Rotaciones", "Errores"].map((t) => button(t, "stat-tab:" + t, statsTab === t ? "primary" : "")).join("")}</div><div id="stat-body">${statsBody(statsTab, source)}</div>`,
   );
 }
-function statsBody(tab) {
-  const s = statistics(state, statsSet);
+function statsBody(tab, source = state) {
+  const s = statistics(source, statsSet);
   const table = (headers, rows, total) =>
     `<div class="table-scroll"><table><thead><tr>${headers.map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v) => `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody>${total ? `<tfoot><tr>${total.map((v) => `<td>${v}</td>`).join("")}</tr></tfoot>` : ""}</table></div>`;
   if (tab === "Errores")
