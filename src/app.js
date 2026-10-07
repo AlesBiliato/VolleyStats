@@ -1254,7 +1254,7 @@ function renderWelcome() {
 
         <div class="welcome-footer">
           <p class="muted">Las plantillas se guardan solamente en este dispositivo.</p>
-          ${button("Ver partidos finalizados", "nav:matches", "welcome-matches")}
+          ${button("Ver archivo de partidos", "nav:matches", "welcome-matches")}
           ${button(
             "Continuar",
             "continue-welcome",
@@ -1404,20 +1404,19 @@ function renderMatches() {
       ${brandLink(returnCommand)}
       <nav>
         ${hasMatch ? button("Partido", "nav:match") : ""}
-        ${hasMatch ? button("Historial", "nav:history") : ""}
-        ${button("Partidos", "nav:matches", "active")}
+        ${button("Archivo", "nav:matches", "active")}
         ${hasMatch ? button("Plantilla", "nav:roster") : ""}
       </nav>
       <div class="save-state"><i></i>${storageError ? "Guardado no disponible" : "Guardado en este dispositivo"}</div>
     </header>
     <main class="matches-page">
       <div class="page-heading">
-        <div><span class="eyebrow">ARCHIVO LOCAL</span><h1>Partidos</h1></div>
+        <div><span class="eyebrow">ARCHIVO LOCAL</span><h1>Archivo de partidos</h1></div>
         ${button(hasMatch ? "Volver al partido" : "Volver a bienvenida", returnCommand)}
       </div>
       ${error ? `<p class="matches-storage-error" role="alert">${esc(error.message)}</p>` : ""}
       ${matches.length
-        ? `<section class="matches-grid" aria-label="Partidos finalizados">${matches.map(archiveMatchCard).join("")}</section>`
+        ? `<section class="matches-grid" aria-label="Archivo de partidos finalizados">${matches.map(archiveMatchCard).join("")}</section>`
         : `<section class="wide-card matches-empty"><h2>Aún no hay partidos finalizados.</h2><p>Los encuentros aparecerán aquí cuando se finalicen.</p></section>`}
       <footer><span>VOLLEYSTATS <b> / </b> Tu equipo, punto a punto.</span><span>Archivo local · ${matches.length} ${matches.length === 1 ? "partido" : "partidos"}</span></footer>
     </main>`;
@@ -1447,9 +1446,8 @@ function render() {
       ${brandLink("nav:match")}
 
       <nav>
-        ${button("Partido", "nav:match", page === "match" ? "active" : "")}
-        ${button("Historial", "nav:history", page === "history" ? "active" : "")}
-        ${button("Partidos", "nav:matches", page === "matches" ? "active" : "")}
+        ${button("Partido", "nav:match", page === "match" || page === "history" ? "active" : "")}
+        ${button("Archivo", "nav:matches", page === "matches" ? "active" : "")}
         ${button("Plantilla", "nav:roster", page === "roster" ? "active" : "")}
       </nav>
 

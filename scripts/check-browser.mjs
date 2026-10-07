@@ -92,6 +92,7 @@ try{
   );
   assert.match(await page.locator('main').innerText(),/Aún no tienes ninguna plantilla/);
   assert.match(await page.locator('main').innerText(),/Primero crea una plantilla para empezar/);
+  assert.match(await page.locator('main').innerText(),/Ver archivo de partidos/);
   assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),true);
   assert.equal(await page.locator('#match-basics-form').count(),0);
   await page.locator('[data-cmd="continue-welcome"]').dispatchEvent('click');
@@ -830,8 +831,10 @@ try{
   const archived=structuredClone(await state());
   archived.id='archived-finished-report';
   await page.evaluate(match=>localStorage.setItem('volleystats.archives.v1',JSON.stringify([match])),archived);
-  await tap('nav:history');
-  assert.doesNotMatch(await page.locator('main').innerText(),/Partidos anteriores/);
+  await tap('history');
+  assert.equal(await page.locator('nav [data-cmd="nav:match"].active').count(),1);
+  assert.doesNotMatch(await page.locator('#modal').innerText(),/Partidos anteriores/);
+  await tap('close');
   await tap('nav:matches');
   assert.equal(await page.locator('[data-cmd="generate-pdf-archive:archived-finished-report"]').count(),1);
  });
@@ -938,7 +941,12 @@ try{
   equal((await state()).set,2);equal((await state()).score,[0,0]);await undo();equal(await state(),closed);await undo();equal((await state()).status,'playing');
  });
  await check('Estadisticas, plantilla e historial',async()=>{
-  await reset();await tap('stats');equal(await page.locator('.stats-tabs .primary').innerText(),'General');equal(await page.locator('.stats-tabs button').allTextContents(),['General','K1/K2','Rotaciones','Errores']);await tap('stat-tab:K1/K2');equal(await page.locator('.phase-card').count(),2);assert.match(await page.locator('.phase-card').nth(0).innerText(),/Recepción/);assert.match(await page.locator('.phase-card').nth(1).innerText(),/Saque/);assert.equal(await page.locator('.phase-dashboard table').count(),0);assert.match(await page.locator('.phase-summary').innerText(),/Total de fases/);for(const tab of ['General','Rotaciones','Errores'])await tap('stat-tab:'+tab);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/Sustituciones/);await tap('close');await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),10);
+  await reset();
+  equal(await page.locator('nav button').allTextContents(),['Partido','Archivo','Plantilla']);
+  assert.equal(await page.locator('nav button').filter({hasText:'Historial'}).count(),0);
+  await tap('history');assert.equal(await page.locator('nav [data-cmd="nav:match"].active').count(),1);assert.match(await page.locator('#modal .dialog-head').innerText(),/Corrección \/ Historial/);await tap('close');
+  await tap('nav:matches');assert.equal(await page.locator('nav [data-cmd="nav:matches"].active').innerText(),'Archivo');assert.match(await page.locator('main h1').innerText(),/Archivo de partidos/);await tap('nav:match');
+  await tap('stats');equal(await page.locator('.stats-tabs .primary').innerText(),'General');equal(await page.locator('.stats-tabs button').allTextContents(),['General','K1/K2','Rotaciones','Errores']);await tap('stat-tab:K1/K2');equal(await page.locator('.phase-card').count(),2);assert.match(await page.locator('.phase-card').nth(0).innerText(),/Recepción/);assert.match(await page.locator('.phase-card').nth(1).innerText(),/Saque/);assert.equal(await page.locator('.phase-dashboard table').count(),0);assert.match(await page.locator('.phase-summary').innerText(),/Total de fases/);for(const tab of ['General','Rotaciones','Errores'])await tap('stat-tab:'+tab);assert.doesNotMatch(await page.locator('#stat-body').innerText(),/Sustituciones/);await tap('close');await tap('nav:roster');equal(await page.locator('.roster-grid article').count(),10);
   const matchBefore=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
   const rosterBefore=(await state()).roster;
   await tap('add-roster-player');await page.locator('[name="id"]').fill('22');await page.locator('[name="name"]').fill('Irene');await page.selectOption('[name="role"]','Receptor');await tap('save-roster-player');
@@ -982,8 +990,7 @@ try{
    equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);
    await tap('close');
 
-   await tap('nav:history');assert.match(await page.locator('main').innerText(),/Todavía no hay operaciones/);
-  await tap('nav:match');await tap('ours');equal((await state()).score,[1,0]);await undo();
+   await tap('nav:match');await tap('history');assert.match(await page.locator('#modal').innerText(),/Todavía no hay operaciones/);await tap('close');await tap('ours');equal((await state()).score,[1,0]);await undo();
  });
  await check('Eliminar jugador confirma, persiste y conserva partidos actuales e historicos',async()=>{
   const sample=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'#',label:'#7 · Ataque #'});sample.demo=false;sample.id='current-delete-player';await reset(sample);
