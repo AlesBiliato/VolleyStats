@@ -32,6 +32,7 @@ const runtimeRequests=[];
 page.on('request',request=>runtimeRequests.push(new URL(request.url()).pathname));
 page.on('response',response=>{if(response.status()===404)errors.push(`HTTP 404: ${new URL(response.url()).pathname}`)});
 const url=`http://127.0.0.1:${server.address().port}`;
+const DESKTOP_VIEWPORTS=[[1024,600],[1024,768],[1280,800],[1366,640],[1366,768],[1920,1080]];
 const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.match.v1')));
 async function reset(s=initial(),rosterName='Plantilla test') {
  s.demo=false;
@@ -309,7 +310,7 @@ try{
   assert.equal(await page.locator('[data-cmd="select-roster:roster-b"]').getAttribute('aria-pressed'),'true');
  });
 
- await check('Bienvenida con muchas plantillas conserva acceso y scroll vertical',async()=>{
+ await check('Bienvenida con muchas plantillas usa paginación sin scroll de página',async()=>{
   const players=initial().roster;
   await page.goto(url);
   await page.evaluate((players)=>{
@@ -323,61 +324,28 @@ try{
   },players);
   await page.reload();
 
-  let scrollRequired=false;
-  for(const [width,height] of [[768,1024],[1024,768],[1024,600],[1366,768],[1920,1080]]){
+  for(const [width,height] of DESKTOP_VIEWPORTS){
    await page.setViewportSize({width,height});
-   const main=page.locator('.welcome-stage');
-   await main.evaluate(element=>element.scrollTo(0,0));
-   const top=await page.evaluate(({width,height})=>{
-    const stage=document.querySelector('.welcome-stage');
-    const stageBox=stage.getBoundingClientRect();
-    const heading=document.querySelector('.welcome-heading h1').getBoundingClientRect();
-    const first=document.querySelector('.welcome-roster-card').getBoundingClientRect();
-    return {
-     horizontal:document.documentElement.scrollWidth>width+1||stage.scrollWidth>stage.clientWidth+1,
-     headingAccessible:heading.top>=stageBox.top-1&&heading.bottom<=Math.min(stageBox.bottom,height)+1,
-     firstAccessible:first.top>=stageBox.top-1&&first.bottom<=Math.min(stageBox.bottom,height)+1,
-     contentStartsInside:document.querySelector('.welcome-card').getBoundingClientRect().top>=stageBox.top-1,
-     needsScroll:stage.scrollHeight>stage.clientHeight+1,
-    };
-   },{width,height});
-   assert.equal(top.horizontal,false,`${width}x${height} sin overflow horizontal`);
-   assert.equal(top.headingAccessible,true,`${width}x${height} cabecera accesible`);
-   assert.equal(top.firstAccessible,true,`${width}x${height} primera plantilla accesible`);
-   assert.equal(top.contentStartsInside,true,`${width}x${height} contenido no queda por encima`);
-   scrollRequired ||= top.needsScroll;
-
-   await main.evaluate(element=>element.scrollTo(0,element.scrollHeight));
-   const bottom=await page.evaluate(({height})=>{
-    const stage=document.querySelector('.welcome-stage');
-    const stageBox=stage.getBoundingClientRect();
-    const last=document.querySelector('.welcome-roster-card:last-child').getBoundingClientRect();
-    const proceed=document.querySelector('[data-cmd="continue-welcome"]').getBoundingClientRect();
-    const controls=[...document.querySelectorAll('.welcome-roster-option,.welcome-roster-tools button,[data-cmd="continue-welcome"]')].map(control=>control.getBoundingClientRect().height);
-    return {
-     lastAccessible:last.top<Math.min(stageBox.bottom,height)&&last.bottom<=Math.min(stageBox.bottom,height)+1,
-     proceedAccessible:proceed.top>=stageBox.top-1&&proceed.bottom<=Math.min(stageBox.bottom,height)+1,
-     scrollTop:stage.scrollTop,
-     needsScroll:stage.scrollHeight>stage.clientHeight+1,
-     tactile:controls.every(value=>value>=43.5),
-    };
-   },{height});
-   assert.equal(bottom.lastAccessible,true,`${width}x${height} última plantilla alcanzable`);
-   assert.equal(bottom.proceedAccessible,true,`${width}x${height} Continuar alcanzable`);
-   assert.equal(bottom.tactile,true,`${width}x${height} controles táctiles`);
-   if(bottom.needsScroll)assert(bottom.scrollTop>0,`${width}x${height} permite scroll vertical`);
-
-   await main.evaluate(element=>element.scrollTo(0,0));
-   assert.equal(await page.locator('.welcome-heading h1').isVisible(),true);
+   const fit=await page.evaluate(({width,height})=>({
+    pageOverflow:document.documentElement.scrollWidth>width+1||document.documentElement.scrollHeight>height+1||document.body.scrollWidth>width+1||document.body.scrollHeight>height+1,
+    card:document.querySelector('.welcome-card').getBoundingClientRect(),
+    controls:[...document.querySelectorAll('.welcome-roster-option,.welcome-roster-tools button,[data-cmd="continue-welcome"]')].map(control=>control.getBoundingClientRect()),
+   }),{width,height});
+   assert.equal(fit.pageOverflow,false,`${width}x${height} sin scroll de página`);
+   assert(fit.card.bottom<=height+1,`${width}x${height} tarjeta dentro del viewport`);
+   assert(fit.controls.every(box=>box.top>=-1&&box.bottom<=height+1&&box.height>=43.5),`${width}x${height} controles accesibles`);
+   assert.equal(await page.locator('.welcome-roster-card').count(),6);
+   assert.equal(await page.locator('.pagination').count(),1);
   }
-  assert.equal(scrollRequired,true,'el contenido alto activa scroll vertical');
 
   await page.setViewportSize({width:1024,height:600});
-  await page.locator('.welcome-stage').evaluate(element=>element.scrollTo(0,element.scrollHeight));
+  await tap('welcome-page:next');
+  assert.equal(await page.locator('.welcome-roster-card').count(),6);
+  await tap('welcome-page:next');
+  assert.equal(await page.locator('.welcome-roster-card').count(),3);
   await tap('select-roster:many-15');
   assert.equal(await page.locator('[data-cmd="select-roster:many-15"]').getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator('[data-cmd="continue-welcome"]').isDisabled(),false);
-  await page.locator('.welcome-stage').evaluate(element=>element.scrollTo(0,element.scrollHeight));
   await tap('continue-welcome');
   assert.match(await page.locator('.setup-roster-reference').innerText(),/Plantilla 15/);
  });
@@ -920,15 +888,15 @@ try{
   await tap('stats-archive:welcome-archive');assert.match(await page.locator('#stat-body').innerText(),/Álex/);await tap('close');await tap('nav:welcome');
   assert.match(await page.locator('main').innerText(),/Bienvenido a VolleyStats/);assert.equal(await state(),null);
  });
- await check('Partidos con diez tarjetas es responsive y mantiene controles accesibles',async()=>{
+ await check('Partidos con muchas tarjetas usa paginación y mantiene controles accesibles',async()=>{
   const matches=Array.from({length:10},(_,index)=>finishedMatch({id:'responsive-'+index,rival:'Asociación Deportiva Rival con un nombre especialmente largo '+index,date:`2026-09-${String(index+1).padStart(2,'0')}`,time:`${String(10+index).padStart(2,'0')}:15`,venue:index%2?'Visitante':'Local',rosterName:'Club Deportivo Voleibol Ciudad Universitaria',sets:[[25,20],[23,25],[25,22]]}));
   await page.goto(url);await page.evaluate(items=>{localStorage.clear();localStorage.setItem('volleystats.archives.v1',JSON.stringify(items));},matches);await page.reload();await tap('nav:matches');
-  for(const [width,height] of [[768,1024],[1024,768],[1024,600],[1280,800],[1366,768],[1920,1080]]){
+  for(const [width,height] of DESKTOP_VIEWPORTS){
    await page.setViewportSize({width,height});
-   const layout=await page.evaluate(({width})=>{const grid=document.querySelector('.matches-grid'),cards=[...document.querySelectorAll('.match-archive-card')],buttons=[...document.querySelectorAll('.match-archive-actions button')];return {horizontal:document.documentElement.scrollWidth>width+1||grid.scrollWidth>grid.clientWidth+1,scrollable:grid.scrollHeight>grid.clientHeight,cards:cards.map(card=>{const box=card.getBoundingClientRect();return {width:box.width,inside:box.left>=-1&&box.right<=width+1};}),buttons:buttons.map(button=>button.getBoundingClientRect().height)};},{width});
-   assert.equal(layout.horizontal,false,`${width} sin overflow horizontal`);assert.equal(layout.cards.length,10);for(const card of layout.cards){assert(card.width>0);assert.equal(card.inside,true);}for(const height of layout.buttons)assert(height>=47.5);if(height<=800)assert.equal(layout.scrollable,true);
+   const layout=await page.evaluate(({width,height})=>{const grid=document.querySelector('.matches-grid'),cards=[...document.querySelectorAll('.match-archive-card')],buttons=[...document.querySelectorAll('.match-archive-actions button')];return {overflow:document.documentElement.scrollWidth>width+1||document.documentElement.scrollHeight>height+1||document.body.scrollWidth>width+1||document.body.scrollHeight>height+1||grid.scrollWidth>grid.clientWidth+1,cards:cards.map(card=>{const box=card.getBoundingClientRect();return {width:box.width,inside:box.left>=-1&&box.right<=width+1&&box.top>=-1&&box.bottom<=height+1};}),buttons:buttons.map(button=>button.getBoundingClientRect().height)};},{width,height});
+   assert.equal(layout.overflow,false,`${width} sin overflow ${JSON.stringify(layout)}`);assert.equal(layout.cards.length,4);for(const card of layout.cards){assert(card.width>0);assert.equal(card.inside,true,`${width} tarjeta dentro ${JSON.stringify(layout)}`);}for(const height of layout.buttons)assert(height>=47.5);
   }
-  await page.locator('.matches-grid').evaluate(grid=>grid.scrollTo(0,grid.scrollHeight));assert.equal(await page.locator('.match-archive-card').last().isVisible(),true);
+  await tap('archive-page:next');assert.equal(await page.locator('.match-archive-card').count(),4);assert.match(await page.locator('.pagination').innerText(),/Página 2 de 3/);await tap('archive-page:next');assert.equal(await page.locator('.match-archive-card').count(),2);await tap('archive-page:prev');assert.equal(await page.locator('.match-archive-card').count(),4);
  });
  await check('Finalizar partido entre sets conserva el set cerrado y permite deshacer',async()=>{
   await reset();await commit('ours');await tap('finish');await commit('confirm-finish');const between=await state();equal(between.status,'between');equal(between.finishedSets,[{set:1,score:[1,0]}]);assert.equal(await page.locator('[data-cmd="next"]').count(),1);assert.equal(await page.locator('[data-cmd="finish-match"]').count(),1);
@@ -996,7 +964,7 @@ try{
   const sample=transition(initial(),{type:'action',player:7,action:'Ataque',grade:'#',label:'#7 · Ataque #'});sample.demo=false;sample.id='current-delete-player';await reset(sample);
   const archived=structuredClone(await state());archived.id='archived-delete-player';const archiveBefore=JSON.stringify([archived]);await page.evaluate(value=>localStorage.setItem('volleystats.archives.v1',value),archiveBefore);const matchBefore=await page.evaluate(()=>localStorage.getItem('volleystats.match.v1'));
   await tap('nav:roster');const playerRow=id=>page.locator(`.roster-grid article[data-player-id="${id}"]`);assert.equal(await playerRow(7).count(),1);assert.equal(await playerRow(7).locator('[data-cmd="delete-roster-player:7"]').innerText(),'Eliminar');
-  for(const [width,height] of [[768,1024],[1024,768],[1280,800],[1366,768],[1920,1080]]){await page.setViewportSize({width,height});const layout=await page.evaluate(()=>{const grid=document.querySelector('.roster-grid:not(.saved-rosters-grid)'),cards=[...grid.querySelectorAll('article[data-player-id]')];return {horizontal:grid.scrollWidth>grid.clientWidth+1||document.documentElement.scrollWidth>innerWidth+1,cards:cards.map(card=>{const box=card.getBoundingClientRect(),copy=card.querySelector('.roster-player-copy').getBoundingClientRect(),actions=card.querySelector('.roster-player-actions').getBoundingClientRect(),buttons=[...card.querySelectorAll('.roster-player-actions button')].map(button=>button.getBoundingClientRect());return {actionsInside:actions.left>=box.left-1&&actions.right<=box.right+1,copyClear:copy.right<=actions.left+1,buttons:buttons.map(button=>({height:button.height,inside:button.left>=box.left-1&&button.right<=box.right+1}))};})};});assert.equal(layout.horizontal,false,`${width}x${height} sin overflow`);for(const card of layout.cards){assert.equal(card.actionsInside,true);assert.equal(card.copyClear,true);for(const button of card.buttons){assert(button.height>=43.5);assert.equal(button.inside,true);}}}
+  for(const [width,height] of DESKTOP_VIEWPORTS){await page.setViewportSize({width,height});const layout=await page.evaluate(()=>{const grid=document.querySelector('.roster-grid:not(.saved-rosters-grid)'),cards=[...grid.querySelectorAll('article[data-player-id]')];return {horizontal:grid.scrollWidth>grid.clientWidth+1||document.documentElement.scrollWidth>innerWidth+1||document.body.scrollWidth>innerWidth+1,vertical:document.documentElement.scrollHeight>innerHeight+1||document.body.scrollHeight>innerHeight+1,cards:cards.map(card=>{const box=card.getBoundingClientRect(),copy=card.querySelector('.roster-player-copy').getBoundingClientRect(),actions=card.querySelector('.roster-player-actions').getBoundingClientRect(),buttons=[...card.querySelectorAll('.roster-player-actions button')].map(button=>button.getBoundingClientRect());return {actionsInside:actions.left>=box.left-1&&actions.right<=box.right+1,copyClear:copy.right<=actions.left+1,buttons:buttons.map(button=>({height:button.height,inside:button.left>=box.left-1&&button.right<=box.right+1}))};})};});assert.equal(layout.horizontal,false,`${width}x${height} sin overflow horizontal`);assert.equal(layout.vertical,false,`${width}x${height} sin overflow vertical`);for(const card of layout.cards){assert.equal(card.actionsInside,true);assert.equal(card.copyClear,true);for(const button of card.buttons){assert(button.height>=43.5);assert.equal(button.inside,true);}}}
   await page.setViewportSize({width:1024,height:600});await tap('delete-roster-player:7');assert.match(await page.locator('#modal').innerText(),/Eliminar jugador/);assert.match(await page.locator('#modal').innerText(),/#7 Álex/);assert.match(await page.locator('#modal').innerText(),/partidos anteriores no se modificarán/);assert.equal(await page.locator('[data-cmd="confirm-delete-roster-player:7"].danger').count(),1);await tap('close');assert.equal(await playerRow(7).count(),1);assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(player=>player.id===7)));
   await tap('delete-roster-player:7');await press('Escape');assert.equal(await page.locator('#modal').evaluate(dialog=>dialog.open),false);assert.equal(await playerRow(7).count(),1);assert(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(player=>player.id===7)));
   await tap('delete-roster-player:7');await tap('confirm-delete-roster-player:7');assert.equal(await playerRow(7).count(),0);assert.match(await page.locator('#toast').innerText(),/#7 Álex eliminado/);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('volleystats.rosters.v1'))[0].players.some(player=>player.id===7)),false);assert.equal(await page.evaluate(()=>localStorage.getItem('volleystats.match.v1')),matchBefore);assert.equal(await page.evaluate(()=>localStorage.getItem('volleystats.archives.v1')),archiveBefore);
@@ -1147,6 +1115,24 @@ try{
   for(const [width,height] of [[768,1024],[1024,768],[1280,800]]){await page.setViewportSize({width,height});await assertZoneLayout('.court-panel .court');await assertPlayerReadability();}
   const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await page.setViewportSize({width:768,height:1024});await tap('next');await page.locator('.setup-court').waitFor();await assertZoneLayout('.setup-court');
  });
+ await check('Preparación de Set cabe en las seis resoluciones desktop',async()=>{
+  const between=initial();between.status='between';between.finishedSets=[{set:1,score:[25,20]}];await reset(between);await tap('next');await page.locator('.setup-court').waitFor();
+  for(const [width,height] of DESKTOP_VIEWPORTS){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(({width,height})=>{const court=document.querySelector('.setup-court').getBoundingClientRect(),controls=[...document.querySelectorAll('[data-cmd="continue-lineup"],[data-cmd="back-to-match-summary"]')].map(button=>button.getBoundingClientRect());return {page:document.documentElement.scrollWidth<=width+1&&document.documentElement.scrollHeight<=height+1&&document.body.scrollWidth<=width+1&&document.body.scrollHeight<=height+1,court:court.left>=-1&&court.right<=width+1&&court.top>=-1&&court.bottom<=height+1,controls:controls.every(box=>box.left>=-1&&box.right<=width+1&&box.top>=-1&&box.bottom<=height+1)};},{width,height});
+   assert.equal(layout.page,true,`${width}x${height} preparación sin scroll ${JSON.stringify(layout)}`);assert.equal(layout.court,true,`${width}x${height} cancha dentro`);assert.equal(layout.controls,true,`${width}x${height} continuación visible`);
+  }
+ });
+ await check('Plantilla con más de 12 jugadores pagina sin scroll',async()=>{
+  const many=initial();many.demo=false;many.id='many-players-match';many.roster=[...many.roster,...Array.from({length:10},(_,index)=>({id:20+index,name:`Jugador ${20+index}`,role:index===9?'Líbero':'Receptor'}))];
+  await reset(many);await tap('nav:roster');
+  for(const [width,height] of DESKTOP_VIEWPORTS){
+   await page.setViewportSize({width,height});
+   const layout=await page.evaluate(({width,height})=>({cards:document.querySelectorAll('.roster-grid article').length,pagination:document.querySelectorAll('.pagination').length,page:document.documentElement.scrollWidth<=width+1&&document.documentElement.scrollHeight<=height+1&&document.body.scrollWidth<=width+1&&document.body.scrollHeight<=height+1,buttons:[...document.querySelectorAll('.roster-grid article button')].every(button=>{const box=button.getBoundingClientRect();return box.left>=-1&&box.right<=width+1&&box.top>=-1&&box.bottom<=height+1;})}),{width,height});
+   assert.equal(layout.cards,12,`${width}x${height} primera página`);assert.equal(layout.pagination,1);assert.equal(layout.page,true,`${width}x${height} plantilla sin scroll`);assert.equal(layout.buttons,true,`${width}x${height} botones dentro`);
+  }
+  const totalPlayers=many.roster.length;await tap('roster-page:next');assert.equal(await page.locator('.roster-grid article').count(),totalPlayers-12);assert.equal(await page.locator('[data-player-id="29"]').count(),1);await tap('roster-page:prev');assert.equal(await page.locator('.roster-grid article').count(),12);assert.equal(await page.locator('[data-player-id="7"]').count(),1);
+ });
  await check('Encabezado real por sede, estados, recarga y nombres largos',async()=>{
   const local=initial();local.rosterId='test-roster';local.rival='Rival Norte';local.venue='Local';
   await reset(local,'Equipo Casa');
@@ -1192,9 +1178,9 @@ try{
  });
  await check('Sin scroll ni controles recortados en tablet y al girar',async()=>{
   const s=initial();s.set=5;s.score=[24,24];s.finishedSets=[1,2,3,4].map(set=>({set,score:[25,23]}));await reset(s);
-  for(const [width,height] of [[1024,600],[1280,800],[1024,768],[1180,720],[800,1280],[768,1024],[600,960],[1366,640]]){
+  for(const [width,height] of [...DESKTOP_VIEWPORTS,[768,1024],[800,1280],[600,960],[1180,720]]){
    await page.setViewportSize({width,height});
-   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .brand-logo,#app > header,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className||el.tagName;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(id);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth)failures.push('page overflow');return failures});assert.deepEqual(failures,[],`${width}x${height}`);
+   const failures=await page.evaluate(()=>{const failures=[];for(const el of document.querySelectorAll('#app button,#app .brand-logo,#app > header,#app .court,#app .bench,#app .latest')){const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const id=el.dataset.cmd||el.className||el.tagName;if(r.left<0||r.top<0||r.right>innerWidth+1||r.bottom>innerHeight+1)failures.push(`${id} rect=${JSON.stringify({left:r.left,top:r.top,right:r.right,bottom:r.bottom})}`);for(let p=el.parentElement;p&&p.id!=='app';p=p.parentElement){if(['hidden','clip'].includes(getComputedStyle(p).overflowY)){const b=p.getBoundingClientRect();if(r.bottom>b.bottom+1||r.top<b.top-1)failures.push(id+' clipped');}}}if(document.documentElement.scrollHeight>innerHeight||document.documentElement.scrollWidth>innerWidth||document.body.scrollHeight>innerHeight||document.body.scrollWidth>innerWidth)failures.push('page overflow');return failures});assert.deepEqual(failures,[],`${width}x${height}`);
    for(const cmd of ['sub','stats','history','unforced-error']){await tap(cmd);const r=await page.locator('#modal').boundingBox();assert(r.y>=0&&r.y+r.height<=height+1);await tap('close');}
   }
  });

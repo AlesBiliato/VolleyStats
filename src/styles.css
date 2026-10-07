@@ -699,8 +699,7 @@ h1 > span {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: 16px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: visible;
   padding: 2px 2px 12px;
 }
 .match-archive-card {
@@ -924,7 +923,7 @@ footer b {
 /* Bienvenida y selección de plantilla */
 #app > main.welcome-stage {
   justify-content: flex-start;
-  overflow-y: auto;
+  overflow: visible;
 }
 #app > main.welcome-stage > .welcome-card {
   width: 100%;
@@ -1062,6 +1061,19 @@ footer b {
 }
 .welcome-continue {
   min-width: 170px;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 14px 0 0;
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+.pagination button {
+  min-height: 40px;
+  padding: 8px 14px;
 }
 @media (max-width: 900px) {
   .welcome-roster-grid {
@@ -1716,14 +1728,14 @@ dialog.substitution-dialog {
 html,
 body {
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 #app {
   height: 100vh;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 #app > header {
   height: clamp(48px, 7dvh, 68px);
@@ -1904,7 +1916,7 @@ body {
 #app .wide-card {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 dialog {
   max-height: calc(100dvh - 24px);
@@ -3923,5 +3935,218 @@ dialog.keyboard-errors-dialog {
 @media (hover: hover) and (pointer: fine) {
   .keyboard-key {
     display: inline-flex;
+  }
+}
+
+/* Desktop viewport fit: collections paginate in the UI, so the page itself
+   can remain fully visible without clipping or a page-level scroller. */
+@media (min-width: 901px) {
+  #app > main {
+    overflow: visible;
+  }
+
+  #app .welcome-card,
+  #app .setup-card,
+  #app > main > .wide-card {
+    overflow: visible;
+  }
+
+  .welcome-roster-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .welcome-roster-option {
+    min-height: 70px;
+    padding: 11px 13px;
+    gap: 4px;
+  }
+
+  .welcome-roster-tools {
+    padding: 0 8px 8px;
+  }
+
+  .roster-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .roster-grid article {
+    min-height: 104px;
+    padding: 12px;
+  }
+
+  .roster-player-actions {
+    gap: 6px;
+  }
+
+  .roster-player-actions button {
+    min-height: 44px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  .matches-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .match-archive-card {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .match-archive-copy h2 {
+    margin: 4px 0;
+    font-size: 15px;
+  }
+
+  .match-archive-result strong {
+    font-size: 24px;
+  }
+
+  .match-archive-actions {
+    gap: 7px;
+  }
+
+  .match-archive-actions button {
+    min-height: 48px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 800px) {
+  #app > header {
+    height: 48px;
+  }
+
+  #app > main {
+    padding-top: 6px;
+    padding-bottom: 4px;
+    gap: 6px;
+  }
+
+  #app .page-heading {
+    min-height: 38px;
+  }
+
+  #app h1 {
+    font-size: 20px;
+  }
+
+  #app .brand-logo {
+    width: 44px;
+    height: 44px;
+  }
+
+  #app .welcome-heading {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  #app .welcome-card {
+    padding: 16px;
+    margin: 0 auto;
+  }
+
+  #app .welcome-heading h1 {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+
+  #app .welcome-heading p {
+    margin-top: 4px;
+  }
+
+  #app .welcome-heading > img {
+    width: 48px;
+    height: 48px;
+  }
+
+  #app .welcome-toolbar {
+    margin-top: 10px;
+  }
+
+  #app .welcome-footer {
+    position: static;
+    margin: 10px -16px -16px;
+    padding: 10px 16px 12px;
+  }
+
+  #app .welcome-roster-grid {
+    margin-top: 8px;
+    gap: 8px;
+  }
+
+  #app .welcome-roster-option {
+    min-height: 60px;
+    padding: 8px 10px;
+  }
+
+  #app .welcome-roster-tools button {
+    min-height: 44px;
+    padding: 6px 4px;
+  }
+
+  #app .pagination {
+    margin-top: 8px;
+  }
+
+  #app .setup-section {
+    margin-top: 10px;
+    padding: 10px;
+  }
+
+  #app .setup-card h2 {
+    margin-top: 8px;
+  }
+
+  #app .setup-court {
+    height: clamp(210px, 32dvh, 260px) !important;
+    min-height: 210px;
+  }
+
+  #app .setup-court-layout {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  #app .lineup-rotation-control {
+    min-height: 58px;
+  }
+
+  #app .set-lineup-section .dialog-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  #app .roster-grid article {
+    min-height: 88px;
+    padding: 8px;
+  }
+
+  #app .matches-grid {
+    gap: 8px;
+  }
+
+  #app .match-archive-card {
+    padding: 8px;
+    gap: 7px;
+  }
+
+  #app .match-archive-copy h2 {
+    font-size: 14px;
+  }
+
+  #app .match-archive-copy p,
+  #app .match-archive-result small {
+    font-size: 11px;
+  }
+
+  #app .match-archive-actions button {
+    min-height: 48px;
+    padding: 6px;
   }
 }

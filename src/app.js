@@ -16,6 +16,12 @@ let storageBlocked = false;
 let hasMatch = false;
 let savedRosters = [];
 let selectedRosterId = null;
+let welcomeRosterPage = 1;
+let archivePage = 1;
+let rosterPage = 1;
+const WELCOME_ROSTERS_PER_PAGE = 6;
+const ARCHIVE_MATCHES_PER_PAGE = 4;
+const ROSTER_PLAYERS_PER_PAGE = 12;
 let creatingRoster = false;
 let returnToWelcomeAfterRoster = false;
 let rosterSelectionBeforeCreate = null;
@@ -142,6 +148,23 @@ function brandLink(command = "") {
 const player = (id) => state.roster.find((p) => p.id === id);
 function rosterNameForMatch(match) {
   return resolveRosterName(match, savedRosters);
+}
+function pageItems(items, pageNumber, pageSize) {
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const page = Math.min(Math.max(1, pageNumber), pageCount);
+  return {
+    items: items.slice((page - 1) * pageSize, page * pageSize),
+    page,
+    pageCount,
+  };
+}
+function paginationControls(pageNumber, pageCount, commandPrefix, label) {
+  if (pageCount <= 1) return "";
+  return `<nav class="pagination" aria-label="${label}">
+    ${button("Anterior", `${commandPrefix}:prev`, "pagination-prev", pageNumber <= 1)}
+    <span>Página ${pageNumber} de ${pageCount}</span>
+    ${button("Siguiente", `${commandPrefix}:next`, "pagination-next", pageNumber >= pageCount)}
+  </nav>`;
 }
 function matchHeading() {
   const ours = esc(rosterNameForMatch(state));
@@ -1001,6 +1024,9 @@ function rosterPlayerCard(rosterPlayer) {
 
 function renderSetup() {
   if (creatingRoster) {
+    const sortedPlayers = [...teamRoster].sort((a, b) => a.id - b.id);
+    const rosterPageData = pageItems(sortedPlayers, rosterPage, ROSTER_PLAYERS_PER_PAGE);
+    rosterPage = rosterPageData.page;
     app.innerHTML = `
       <header>
         ${brandLink()}
@@ -1040,11 +1066,9 @@ function renderSetup() {
           ${
             teamRoster.length
               ? `<div class="roster-grid">
-                  ${[...teamRoster]
-                    .sort((a, b) => a.id - b.id)
-                    .map(rosterPlayerCard)
-                    .join("")}
+                  ${rosterPageData.items.map(rosterPlayerCard).join("")}
                 </div>`
+                + paginationControls(rosterPage, rosterPageData.pageCount, "roster-page", "Páginas de jugadores")
               : `<p class="muted">
                   Todav\u00eda no has a\u00f1adido ning\u00fan jugador.
                 </p>`
@@ -1188,6 +1212,9 @@ function renderWelcome() {
   const selectedRoster = savedRosters.find(
     (roster) => roster.id === selectedRosterId,
   );
+  const sortedRosters = [...savedRosters].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const rosterPageData = pageItems(sortedRosters, welcomeRosterPage, WELCOME_ROSTERS_PER_PAGE);
+  welcomeRosterPage = rosterPageData.page;
 
   app.innerHTML = `
     <header>
@@ -1223,9 +1250,7 @@ function renderWelcome() {
                 ${button("+ Crear plantilla", "new-roster", "primary")}
               </div>
               <div class="welcome-roster-grid" role="group" aria-label="Plantillas disponibles">
-                ${[...savedRosters]
-                  .sort((a, b) => a.name.localeCompare(b.name, "es"))
-                  .map(
+                ${rosterPageData.items.map(
                     (roster) => `
                       <article class="welcome-roster-card${roster.id === selectedRosterId ? " selected" : ""}">
                         <button
@@ -1243,9 +1268,9 @@ function renderWelcome() {
                         </div>
                       </article>
                     `,
-                  )
-                  .join("")}
+                  ).join("")}
               </div>`
+              + paginationControls(welcomeRosterPage, rosterPageData.pageCount, "welcome-page", "Páginas de plantillas")
             : `<div class="welcome-empty">
                 <h2>Aún no tienes ninguna plantilla.</h2>
                 <p>Primero crea una plantilla para empezar.</p>
@@ -1399,6 +1424,8 @@ function archiveMatchCard(match) {
 
 function renderMatches() {
   const { matches, error } = finalizedMatches();
+  const matchPageData = pageItems(matches, archivePage, ARCHIVE_MATCHES_PER_PAGE);
+  archivePage = matchPageData.page;
   const returnCommand = hasMatch ? "nav:match" : "nav:welcome";
   app.innerHTML = `
     <header>
@@ -1417,7 +1444,7 @@ function renderMatches() {
       </div>
       ${error ? `<p class="matches-storage-error" role="alert">${esc(error.message)}</p>` : ""}
       ${matches.length
-        ? `<section class="matches-grid" aria-label="Archivo de partidos finalizados">${matches.map(archiveMatchCard).join("")}</section>`
+        ? `<section class="matches-grid" aria-label="Archivo de partidos finalizados">${matchPageData.items.map(archiveMatchCard).join("")}</section>${paginationControls(archivePage, matchPageData.pageCount, "archive-page", "Páginas del archivo")}`
         : `<section class="wide-card matches-empty"><h2>Aún no hay partidos finalizados.</h2><p>Los encuentros aparecerán aquí cuando se finalicen.</p></section>`}
       <footer><span>VOLLEYSTATS <b> / </b> Tu equipo, punto a punto.</span><span>Archivo local · ${matches.length} ${matches.length === 1 ? "partido" : "partidos"}</span></footer>
     </main>`;
@@ -1506,7 +1533,11 @@ function render() {
           : page === "roster"
             ? `
               <section class="wide-card">
-                <div class="card-title">
+                ${(() => {
+                  const sortedPlayers = [...teamRoster].sort((a, b) => a.id - b.id);
+                  const rosterPageData = pageItems(sortedPlayers, rosterPage, ROSTER_PLAYERS_PER_PAGE);
+                  rosterPage = rosterPageData.page;
+                  return `<div class="card-title">
                   <div>
                     <h2>Jugadores</h2>
                     <span>${teamRoster.length} jugadores en la plantilla.</span>
@@ -1516,11 +1547,10 @@ function render() {
                 </div>
 
                 <div class="roster-grid">
-                  ${[...teamRoster]
-                    .sort((a, b) => a.id - b.id)
-                    .map(rosterPlayerCard)
-                    .join("")}
+                  ${rosterPageData.items.map(rosterPlayerCard).join("")}
                 </div>
+                ${paginationControls(rosterPage, rosterPageData.pageCount, "roster-page", "Páginas de jugadores")}`;
+                })()}
 
                 ${
                   returnToSetupAfterRoster
@@ -1776,6 +1806,14 @@ document.addEventListener("click", (e) => {
   if (!target) return;
   e.preventDefault();
   const [cmd, value] = target.dataset.cmd.split(":");
+  if (["welcome-page", "archive-page", "roster-page"].includes(cmd)) {
+    const direction = value === "next" ? 1 : -1;
+    if (cmd === "welcome-page") welcomeRosterPage += direction;
+    if (cmd === "archive-page") archivePage += direction;
+    if (cmd === "roster-page") rosterPage += direction;
+    render();
+    return;
+  }
   if (cmd === "new-match") {
     returnToSetupAfterRoster = false;
     returnToWelcomeAfterRoster = false;
